@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' capri: blob:; connect-src 'self' capri:">
+  <title>Capri</title>
+  <link rel="stylesheet" href="styles/capri.css">
+</head>
+<body>
+  <div id="capri" class="capri">
+    <canvas id="sprite" class="capri__sprite" aria-label="Capri"></canvas>
+  </div>
+
+  <canvas id="fx" class="fx" aria-hidden="true"></canvas>
+
+  <canvas id="chip" class="chip" hidden aria-label="Capri’s biochip"></canvas>
+  <canvas id="mask" class="chip" hidden aria-label="Capri, asleep"></canvas>
+
+  <aside id="panel" class="panel" data-kind="info" hidden aria-live="polite">
+    <div class="panel__frame">
+      <div class="panel__plate">
+        <figure class="panel__face" aria-hidden="true">
+          <img src="../../assets/capri/capri-face.png" alt="">
+        </figure>
+        <div class="panel__body">
+          <header class="panel__meta">
+            <span class="panel__who">Capri</span>
+            <span class="panel__tag"></span>
+            <span class="panel__state"></span>
+          </header>
+          <p class="panel__line"></p>
+          <p class="panel__quote" hidden></p>
+          <div class="panel__reply" hidden></div>
+          <p class="panel__summary" hidden></p>
+          <ol class="panel__log" hidden></ol>
+          <div class="panel__actions" hidden></div>
+        </div>
+      </div>
+      <div class="panel__tail" aria-hidden="true"></div>
+    </div>
+  </aside>
+
+  <div id="ticker" class="ticker" hidden>
+    <div class="ticker__plate">
+      <span class="ticker__dot" aria-hidden="true"></span>
+      <span class="ticker__verb"></span>
+      <span class="ticker__target"></span>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

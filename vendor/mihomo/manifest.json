@@ -1,0 +1,10 @@
+{
+  "version": "1.19.33",
+  "release": "https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.33",
+  "assets": {
+    "core.zip": { "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-windows-amd64-v1-v1.19.33.zip", "sha256": "fb0b960eff568459502d4ebe53e9cca203053d86ec9024fe935f19615d74d9aa" },
+    "source.tar.gz": { "url": "https://github.com/MetaCubeX/mihomo/archive/refs/tags/v1.19.33.tar.gz", "sha256": "e7c596b37ff27ec487d19b1920f73e0c97a78067ea35766530ee9659ade72711" },
+    "vendor.tar.gz": { "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/vendor.tar.gz", "sha256": "7ac4d4da0e6a29ef6ed18d2cf8f4c58d361d049ae364fd841acc883aa3a9e1cc" }
+  },
+  "executable": { "name": "mihomo.exe", "sha256": "a4fbf2b8bc2b5416ce2d0d392ac59f2e0a234ea4fcf635b66bd21e62ea9641b9", "platform": "windows-amd64-v1", "go": "1.26.10", "tags": ["with_gvisor"] }
+}

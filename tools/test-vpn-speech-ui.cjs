@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {_electron}=require(process.env.CAPRI_PLAYWRIGHT_PATH||'playwright');const root=path.resolve(__dirname,'..');
+(async()=>{const temp=fs.mkdtempSync(path.join(os.tmpdir(),'capri-vpn-speech-ui-'));let app;
+fs.writeFileSync(path.join(temp,'config.json'),JSON.stringify({welcomed:true,linked:true,muted:true,wander:false,possess:false,skin:'mono',lang:'ru'}));
+const profile=path.join(temp,'profile.yaml');fs.writeFileSync(profile,'proxies:\n - name: Sweden\n   type: socks5\n   server: 127.0.0.1\n   port: 9\nproxy-groups:\n - name: CAPRI\n   type: select\n   proxies: [DIRECT, Sweden]\nrules: ["MATCH,CAPRI"]\n');
+try{
+ app=await _electron.launch({executablePath:process.env.CAPRI_TEST_APP||require('electron'),args:process.env.CAPRI_TEST_APP?['--dev']:[root,'--dev'],cwd:root,env:{...process.env,CAPRI_TEST_DATA:temp,CAPRI_PORT:'47829'}});
+ const page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.waitForTimeout(1500);await page.waitForFunction(()=>document.getElementById('sprite').dataset.busy==='false',null,{timeout:45000});
+ await page.evaluate(()=>{window.vpnUtterances=[];window.host.onCommand(c=>{if(c.name==='launcherSpeech'&&c.action.startsWith('vpn'))window.vpnUtterances.push({action:c.action,location:c.location});});});
+ const opened=app.waitForEvent('window');await page.evaluate(()=>window.host.openMenu());const menu=await opened;await menu.locator('[data-tab="vpn"]').waitFor();
+ await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},profile);
+ assert.equal((await menu.evaluate(()=>window.launcher.vpn.importFile())).ok,true);
+ const start=await menu.evaluate(()=>window.launcher.vpn.start());assert.equal(start.ok,true);assert.equal(start.state.settings.tun.enable,false);
+ await page.waitForFunction(()=>window.vpnUtterances.some(c=>c.action==='vpnConnected'));
+ await page.waitForFunction(()=>/Канал готов|VPN подключён/.test(document.querySelector('.panel__line').textContent));
+ assert.equal((await menu.evaluate(()=>window.launcher.vpn.selectProxy('CAPRI','Sweden'))).ok,true);
+ await page.waitForFunction(()=>document.querySelector('.panel__line').textContent.includes('Sweden'));
+ await page.waitForTimeout(2000);
+ assert.deepEqual(await page.evaluate(()=>window.vpnUtterances.map(c=>c.action)),['vpnConnecting','vpnConnected','vpnLocation']);
+ assert.equal((await menu.evaluate(()=>window.launcher.vpn.stop())).ok,true);
+ await page.waitForFunction(()=>window.vpnUtterances.some(c=>c.action==='vpnDisconnected'));
+ assert.deepEqual(errors,[]);
+ console.log('VPN SPEECH UI PASS: actual main-process manager starts an owned no-TUN core, connects, selects a fixture and disconnects; corresponding renderer phrases appear once despite traffic ticks. Live VPN and adapters untouched.');
+}finally{if(app)await app.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,15 @@
+# Capri VPN implementation plan
+
+Capri remains Electron/JavaScript. The main process owns profiles, encrypted secrets, validation and the Mihomo REST client. The renderer only receives redacted state through a sender-checked, explicit IPC allowlist.
+
+Mihomo 1.19.33 runs as an independent process. Unprivileged proxy mode is available without a service. System TUN runs only through the independently implemented CapriVpn Windows service, never an elevated Electron process. The small .NET Framework service/helper is native Windows infrastructure; it does not contain code from Clash Verge Rev.
+
+The service is installed in Program Files, with SYSTEM/Administrators ownership and write access. Its data directory is private to SYSTEM and administrators. It validates a restricted JSON runtime document, forces its own localhost controller/secret, validates the configuration with the pinned core, then starts the core. A named pipe grants access only to the installing Windows SID, SYSTEM and administrators. The helper authenticates the pipe server against the SCM service PID. The privileged core's secret and controller port are never returned to the unprivileged client. A service-side allowlist exposes only version, counters, proxies, selector changes, fixed-target delay tests and disabling TUN. Upgrade, reload, arbitrary API paths, local file loading and arbitrary DNS queries are blocked. There is no arbitrary executable, shell, path, REST forwarding or registry command from IPC.
+
+Binary and archive hashes are pinned in the vendor manifest. Core version and hash are checked before execution. Remote subscriptions cannot set controller, secret, local file paths, privileged service behavior or executable paths. Profiles are encrypted using Electron safeStorage/Windows DPAPI and never returned to renderer with passwords or subscription tokens. Every apply has a validation step and retains the previous active profile/runtime for rollback.
+
+TUN uses documented Mihomo fields. DNS and routes are owned by the core; Capri does not replace system DNS settings or edit unrelated routes. Disconnect first disables TUN through the API, then stops the process. The service supervises unexpected exits and reacts to network/power changes. This is not a verified kill switch.
+
+Reference analysis: Clash Verge Rev 2.5.8 separates privileged service/core ownership from its UI and maintains runtime staging and recovery. Capri independently implements a smaller single-owner service over documented Mihomo APIs. Mihomo and Verge are GPLv3; Capri's original MIT code stays separate. Mihomo is redistributed unmodified with GPL text, exact source/dependency archives and build provenance. See THIRD-PARTY.md for the distribution inventory.
+
+Acceptance: automated config/IPC/subscription/lifecycle/error/cleanup tests; real unprivileged core smoke test; compiled service and packaged native resources. Administrator TUN, DNS leaks, route cleanup, sleep/network/crash cases require the separate Windows manual checklist and must not be represented as passed without execution.

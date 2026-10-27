@@ -1,0 +1,42 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {_electron}=require(process.env.CAPRI_PLAYWRIGHT_PATH||'playwright');const root=path.resolve(__dirname,'..');
+(async()=>{const temp=fs.mkdtempSync(path.join(os.tmpdir(),'capri-follow-ui-'));let app;
+fs.writeFileSync(path.join(temp,'config.json'),JSON.stringify({welcomed:true,linked:true,muted:true,wander:false,possess:false,skin:'mono',lang:'ru'}));
+try{
+ app=await _electron.launch({executablePath:process.env.CAPRI_TEST_APP||require('electron'),args:process.env.CAPRI_TEST_APP?['--dev']:[root,'--dev'],cwd:root,env:{...process.env,CAPRI_TEST_DATA:temp,CAPRI_PORT:'47829'}});
+ const page=await app.firstWindow();await page.waitForFunction(()=>document.getElementById('sprite')?.dataset.pose==='original');
+ const owner=await app.evaluate(async({BrowserWindow})=>{const w=new BrowserWindow({width:700,height:330,x:320,y:370,alwaysOnTop:true,title:'Capri movement test',webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});await w.loadURL('data:text/html,<body>Capri window tracking test</body>');w.show();w.focus();global.followOwner=w;const h=w.getNativeWindowHandle();return Number(h.length>=8?h.readBigUInt64LE():h.readUInt32LE());});
+ await page.waitForFunction(async(id)=>(await window.host.windowsNow())?.wins.some(w=>w.id===id),owner,{timeout:20000});
+ await page.waitForFunction(()=>document.getElementById('sprite').dataset.busy==='false',null,{timeout:30000});
+ await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/renderer/')).webContents.send('capri:command',{name:'act',act:'sit',pile:0}));
+ await page.waitForFunction(()=>document.getElementById('sprite').dataset.pose==='seated'&&document.getElementById('sprite').dataset.busy==='false');
+ await app.evaluate(({BrowserWindow},id)=>{const wc=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/renderer/')).webContents;wc.send('capri:command',{name:'preparePin',windowId:id});wc.send('capri:command',{name:'pinWindow',pinned:true});},owner);
+ await page.waitForFunction(()=>document.getElementById('sprite').dataset.pinned==='true'&&document.getElementById('sprite').dataset.pose==='seated'&&document.getElementById('sprite').dataset.busy==='false');
+ await page.evaluate(id=>{window.followTrace=[];window.host.onWindows(s=>{const w=s.wins.find(w=>w.id===id);if(w){const x=new DOMMatrix(getComputedStyle(document.getElementById('capri')).transform).m41;const last=window.followTrace.at(-1);if(!last||last.windowX!==w.x)window.followTrace.push({time:performance.now(),windowX:w.x,petX:x});}});},owner);
+ await app.evaluate(async()=>{const w=global.followOwner,[x,y]=w.getPosition();for(let i=1;i<=60;i++){w.setPosition(x+i*3,y);await new Promise(r=>setTimeout(r,20));}});
+ await page.waitForTimeout(150);
+ const trace=await page.evaluate(()=>window.followTrace),gaps=trace.slice(1).map((p,i)=>p.time-trace[i].time).sort((a,b)=>a-b),median=gaps[Math.floor(gaps.length/2)];
+ const relative=trace.map(p=>p.petX-p.windowX),spread=Math.max(...relative)-Math.min(...relative);
+ console.log('WINDOW FOLLOW',JSON.stringify({updates:trace.length,medianGapMs:Math.round(median),maxGapMs:Math.round(Math.max(...gaps)),anchorSpread:spread}));
+ assert.ok(trace.length>=20,'window motion must not be limited to the old 150ms polling');assert.ok(median<85,'movement updates should be substantially faster than 150ms');assert.ok(spread<3,'pet must stay at the same relative window position');
+ // Own launcher windows must not falsely occlude the perch. Foreground changes
+ // restack the overlay without taking keyboard focus from the owner window.
+ await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/renderer/')),move=w.moveTop.bind(w);global.overlayRaises=0;w.moveTop=()=>{global.overlayRaises++;return move();};});
+ await page.evaluate(()=>window.host.openMenu());
+ await page.waitForTimeout(750);
+ const menuHandle=await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/launcher/')),h=w.getNativeWindowHandle();return Number(h.length>=8?h.readBigUInt64LE():h.readUInt32LE());});
+ assert.equal(await page.evaluate(async id=>(await window.host.windowsNow()).wins.some(w=>w.id===id),menuHandle),false,'own menu cannot count as a window covering the perch');
+ await app.evaluate(({BrowserWindow})=>{BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/launcher/')).hide();global.followOwner.focus();});
+ await page.waitForTimeout(400);
+ assert.equal(await page.locator('#capri').evaluate(el=>getComputedStyle(el).visibility),'visible');
+ const beforeFocus=await app.evaluate(({BrowserWindow})=>BrowserWindow.getFocusedWindow()?.id||null);
+ await app.evaluate(({BrowserWindow},id)=>{const wc=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/renderer/')).webContents;wc.send('capri:command',{name:'pinWindow',pinned:false});wc.send('capri:command',{name:'preparePin',windowId:id});wc.send('capri:command',{name:'pinWindow',pinned:true});},owner);
+ await page.waitForTimeout(500);
+ const stacking=await app.evaluate(({BrowserWindow})=>({raises:global.overlayRaises,focused:BrowserWindow.getFocusedWindow()?.id||null,overlayVisible:BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/renderer/')).isVisible()}));
+ console.log('WINDOW STACK',JSON.stringify(stacking));
+ assert.ok(stacking.raises>0,'seating transition restores overlay z-order');assert.equal(stacking.focused,beforeFocus,'restacking must not steal keyboard focus');
+ const icon=await app.evaluate(({nativeImage},root)=>{const ico=nativeImage.createFromPath(root+'/assets/icons/capri-mono.ico');if(ico.isEmpty())throw new Error('Windows cannot read ICO');const tray=nativeImage.createFromPath(root+'/assets/icons/tray-mono.png'),b=tray.toBitmap();let bright=0,color=0;for(let i=0;i<b.length;i+=4){if(b[i+3]>200&&b[i]>220)bright++;if(Math.abs(b[i]-b[i+1])>2||Math.abs(b[i]-b[i+2])>2)color++;}return{ico:ico.getSize(),bright,color};},root);
+ assert.ok(icon.ico.width>0);assert.ok(icon.bright>100,'tray should use the bright white NOIR palette');assert.equal(icon.color,0);
+ console.log('WINDOW FOLLOW UI PASS: native owned window movement, renderer seat anchor, high-frequency updates and readable bright monochrome icons.');
+}finally{if(app)await app.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

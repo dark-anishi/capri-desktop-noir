@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capri — приложения</title>
+  <link rel="stylesheet" href="launcher.css">
+  <link rel="stylesheet" href="music.css">
+  <link rel="stylesheet" href="vpn.css">
+</head>
+<body>
+ <div class="window-frame">
+  <header class="titlebar">
+    <img class="brand-icon" src="../../assets/skins/mono/capri-face.svg" alt="">
+    <div class="brand">CAPRI <span>Всё под рукой.</span></div>
+    <span class="connection-badge">В СЕТИ</span>
+    <button id="settings" class="quiet" title="Настройки" aria-label="Настройки">⚙</button>
+    <button id="minimize" class="quiet" title="Свернуть" aria-label="Свернуть">−</button>
+    <button id="close" class="quiet" title="Закрыть" aria-label="Закрыть">×</button>
+  </header>
+  <nav class="tabs" aria-label="Меню">
+    <button data-tab="apps" class="active">Приложения</button>
+    <button data-tab="folders">Папки</button>
+    <button data-tab="music">Музыка</button>
+    <button data-tab="vpn">VPN</button>
+    <button data-tab="skins">Скин персонажа</button>
+  </nav>
+  <main>
+    <section id="apps" class="page active">
+      <div class="library">
+        <section id="drop-assistant" class="drop-assistant" aria-labelledby="drop-title" hidden>
+          <h2 id="drop-title">Заберу в меню. Куда положить?</h2>
+          <p>Предложила категории — можешь выбрать другие.</p>
+          <div id="drop-items"></div>
+          <div class="drop-actions"><button id="drop-confirm">Забрать в меню</button><button id="drop-cancel">Отмена</button></div>
+        </section>
+        <div class="category-bar">
+          <nav id="categories" aria-label="Категории приложений"></nav>
+          <button id="add-category" class="quiet add-category" title="Новая категория" aria-label="Новая категория" aria-expanded="false">+</button>
+        </div>
+        <form id="category-form" hidden>
+          <input id="category-name" maxlength="40" placeholder="Название категории" aria-label="Название категории" required>
+          <button type="submit">Создать</button>
+          <button id="cancel-category" type="button" class="quiet" aria-label="Отмена">×</button>
+        </form>
+        <div class="library-heading"><h1 id="category-title">Недавно запущенные игры</h1><span id="count" class="count">0</span><button id="dropzone" class="add-shortcuts" aria-label="Добавить ярлыки">+ Ярлыки</button></div>
+        <div id="entries" class="entries"></div>
+        <div id="empty" class="empty"><span>Перетащи ярлыки сюда</span><small>или добавь через «+ Ярлыки»</small></div>
+      </div>
+    </section>
+    <section id="folders" class="page" hidden>
+      <div class="library folder-library">
+        <div class="library-heading"><h1>Папки</h1><span id="folder-count" class="count">0</span><button id="add-folders" class="add-shortcuts">+ Папки</button></div>
+        <div id="folder-entries" class="entries"></div>
+        <div id="folder-empty" class="empty"><span>Перетащи папки сюда</span><small>или добавь через «+ Папки». Они останутся на своих местах.</small></div>
+      </div>
+    </section>
+    <section id="music" class="page music-page" hidden>
+      <div class="music-toolbar">
+        <div class="music-heading"><strong>Яндекс Музыка</strong><span>Твой плеер внутри Capri</span></div>
+        <button id="music-back" class="music-tool" title="Назад" aria-label="Назад" disabled>←</button>
+        <button id="music-reload" class="music-tool">Обновить</button>
+        <button id="music-expand" class="music-tool" title="Изменить размер окна" aria-label="Развернуть или уменьшить окно">⛶</button>
+      </div>
+      <div id="music-surface" class="music-surface">
+        <div id="music-loading" class="music-loading" role="status"><span class="music-loader">♪</span><strong id="music-state">Загружаю Яндекс Музыку…</strong><span>Войди в свой аккаунт Яндекса, чтобы слушать музыку.<br>Вход сохранится после перезапуска Capri.</span></div>
+      </div>
+    </section>
+    <section id="vpn" class="page vpn-page" hidden>
+      <div class="vpn-hero">
+        <div><span id="vpn-phase" class="vpn-phase">Отключён</span><h1>Capri VPN</h1><p id="vpn-runtime" class="muted">Mihomo</p></div>
+        <div class="vpn-actions"><label><input id="vpn-tun" type="checkbox"> Системный TUN</label><button id="vpn-connect" class="vpn-primary">Подключить</button><button id="vpn-restart">Перезапустить</button></div>
+      </div>
+      <div id="vpn-error" class="vpn-error" role="alert" hidden></div>
+      <div class="vpn-stats"><div><small>Загрузка</small><strong id="vpn-down">0 Б/с</strong></div><div><small>Отдача</small><strong id="vpn-up">0 Б/с</strong></div><div><small>Получено</small><strong id="vpn-total-down">0 Б</strong></div><div><small>Отправлено</small><strong id="vpn-total-up">0 Б</strong></div></div>
+      <div class="vpn-block"><h2>Профили и подписки</h2>
+        <div class="vpn-row"><select id="vpn-profile" aria-label="Активный профиль"><option>Импортируй профиль</option></select><button id="vpn-import-file">Импорт YAML</button><button id="vpn-update-subscription">Обновить</button><button id="vpn-rollback">Откатить</button><button id="vpn-remove-profile">Удалить</button></div>
+        <details><summary>Добавить HTTPS-подписку</summary><form id="vpn-subscription-form"><div class="vpn-fields"><label class="vpn-field">Название<input id="vpn-subscription-name" maxlength="80" required autocomplete="off"></label><label class="vpn-field">HTTPS-ссылка подписки<input id="vpn-subscription-url" type="password" maxlength="8192" required autocomplete="off" placeholder="https://…"></label></div><button type="submit">Импортировать подписку</button></form></details>
+      </div>
+      <div class="vpn-block"><h2>Серверы и группы</h2><div id="vpn-servers"><p class="muted">Подключи профиль, чтобы увидеть серверы и группы.</p></div></div>
+      <details class="vpn-block"><summary>Режим и маршрутизация</summary>
+        <form id="vpn-basic-form"><div class="vpn-fields"><label class="vpn-field">Режим<select id="vpn-mode"><option value="rule">По правилам</option><option value="global">Глобальный</option><option value="direct">Прямое подключение</option></select></label><label class="vpn-field">Порт локального прокси<input id="vpn-port" type="number" min="1024" max="65535" value="7897"></label></div><div class="vpn-actions"><label><input id="vpn-ipv6" type="checkbox"> IPv6</label><button type="submit">Сохранить режим</button></div></form>
+        <p class="muted">Без TUN действует только локальный HTTP/SOCKS-прокси: <span id="vpn-address">127.0.0.1:7897</span>. Системные настройки прокси Windows не меняются.</p>
+        <form id="vpn-rules-form"><label class="vpn-field">Локальные правила Mihomo (по одному на строку; пусто — правила профиля)<textarea id="vpn-rules" rows="4" placeholder="DOMAIN-SUFFIX,example.com,DIRECT"></textarea></label><button type="submit">Сохранить правила</button></form>
+      </details>
+      <details class="vpn-block"><summary>Сайты без VPN</summary><form id="vpn-bypass-form"><label class="vpn-field">Домены или ссылки — по одному на строку<textarea id="vpn-bypass-sites" rows="5" placeholder="music.yandex.ru&#10;yastatic.net&#10;example.com" maxlength="1024000" spellcheck="false"></textarea></label><p class="muted">Эти сайты и их поддомены открываются напрямую, через твой интернет-провайдер. Исключения работают и в глобальном режиме. Ссылка применяется ко всему домену, включая все страницы и порты. Для Яндекс Музыки также автоматически учитываются серверы аудио и плеера.</p><button type="submit">Сохранить исключения</button></form></details>
+      <details class="vpn-block"><summary>Настройки TUN</summary><form id="vpn-tun-form">
+        <div class="vpn-fields"><label class="vpn-field">Стек<select id="tun-stack"><option value="mixed">Mixed</option><option value="system">System</option><option value="gvisor">GVisor</option></select></label><label class="vpn-field">Имя интерфейса<input id="tun-device" maxlength="40" value="CapriVPN"></label><label class="vpn-field">MTU<input id="tun-mtu" type="number" min="1280" max="9000" value="1500"></label></div>
+        <div class="vpn-actions"><label><input id="tun-auto-route" type="checkbox"> Auto Route</label><label><input id="tun-strict-route" type="checkbox"> Strict Route</label><label><input id="tun-auto-detect-interface" type="checkbox"> Auto Detect Interface</label></div>
+        <div class="vpn-fields"><label class="vpn-field">DNS Hijack<textarea id="tun-dns-hijack" rows="2"></textarea></label><label class="vpn-field">Исключённые интерфейсы<textarea id="tun-exclude-interface" rows="2"></textarea></label><label class="vpn-field">IPv4-адреса TUN (CIDR)<textarea id="tun-inet4-address" rows="2"></textarea></label><label class="vpn-field">IPv6-адреса TUN (CIDR)<textarea id="tun-inet6-address" rows="2"></textarea></label><label class="vpn-field">Маршруты (CIDR)<textarea id="tun-route-address" rows="3"></textarea></label><label class="vpn-field">Исключения маршрутов (CIDR)<textarea id="tun-route-exclude-address" rows="3"></textarea></label></div>
+        <button type="submit">Сохранить TUN</button><p class="muted">Для TUN нужна служба CapriVPN. Безопасность полноценного kill switch не заявляется.</p>
+      </form></details>
+      <details class="vpn-block"><summary>Настройки DNS</summary><form id="vpn-dns-form">
+        <div class="vpn-fields"><label class="vpn-field">Режим DNS<select id="dns-mode"><option value="fake-ip">Fake IP</option><option value="redir-host">Redir Host</option></select></label><label class="vpn-field">IPv6 DNS<input id="dns-ipv6" type="checkbox"></label><label class="vpn-field">DNS-серверы<textarea id="dns-nameserver" rows="3"></textarea></label><label class="vpn-field">Bootstrap DNS<textarea id="dns-default-nameserver" rows="3"></textarea></label><label class="vpn-field">DNS для серверов прокси<textarea id="dns-proxy-server-nameserver" rows="3"></textarea></label></div><button type="submit">Сохранить DNS</button>
+      </form></details>
+      <details class="vpn-block"><summary>Служба и диагностика</summary><p id="vpn-service-state" class="muted">Состояние службы</p><p class="muted">Эти действия требуют подтверждения UAC Windows. Само приложение работает без прав администратора.</p><div class="vpn-actions"><button data-vpn-service="install">Установить / обновить службу</button><button data-vpn-service="start">Запустить службу</button><button data-vpn-service="stop">Остановить службу</button><button data-vpn-service="uninstall">Удалить службу</button></div><pre id="vpn-logs" aria-label="Журнал VPN">Ошибок пока нет.</pre></details>
+    </section>
+    <section id="skins" class="page skins-page" hidden>
+      <div class="section-label">НОВОЕ НАСТРОЕНИЕ</div><h1>Скин персонажа</h1>
+      <p class="muted">Меняется сразу. Выбор сохранится после перезапуска.</p>
+      <div class="skins">
+        <button class="skin-card mono" data-skin="mono"><div class="skin-preview"><img src="../../assets/skins/mono/capri-cutout.svg" alt="Капри с белыми волосами и светлыми вставками"></div><strong>NOIR</strong><span>Белые детали. Чёрные контуры.</span><em>Выбрать</em></button>
+        <button class="skin-card" data-skin="classic"><div class="skin-preview"><img src="../../assets/capri/capri-cutout.png" alt="Капри в оригинальных цветах"></div><strong>ORIGINAL</strong><span>Неон и знакомый характер.</span><em>Выбрать</em></button>
+      </div>
+    </section>
+  </main>
+  <footer hidden><span id="status" role="status" aria-live="polite"></span></footer>
+ </div>
+ <div id="shortcut-menu" class="context-menu" role="menu" aria-label="Действия с ярлыком" hidden></div>
+  <script type="module" src="launcher.js"></script>
+</body>
+</html>

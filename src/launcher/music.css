@@ -1,0 +1,11 @@
+.music-page { flex-direction: column; padding: 0 28px 24px; }
+.music-toolbar { display: flex; align-items: center; gap: 7px; padding: 12px 2px; flex-shrink: 0; }
+.music-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.music-heading strong { font-size: 14px; font-weight: 600; }
+.music-heading span { font-size: 10px; color: var(--muted); }
+.music-tool { padding: 7px 10px; font-size: 11px; }
+.music-surface { flex: 1; min-height: 0; position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 0; background: #111113; }
+.music-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 17px; padding: 24px; text-align: center; }
+.music-loading strong { font-size: 14px; font-weight: 500; line-height: 1.6; }
+.music-loading>span:last-child { color: var(--muted); font-size: 11px; line-height: 1.9; }
+.music-loader { width: 60px; height: 60px; border: 1px solid #555; clip-path: var(--cut); display: grid; place-items: center; font-size: 30px; color: #dededb; }

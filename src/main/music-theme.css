@@ -1,0 +1,22 @@
+/* Preserve the service's player and authentication; adapt only its presentation. */
+html { filter: grayscale(1) !important; color-scheme: dark !important; background: #111113 !important; }
+body { background: #111113 !important; }
+:root {
+  --ym-background-color-primary-enabled-basic: #111113 !important;
+  --ym-background-color-primary-enabled-content: #19191c !important;
+  --ym-background-color-secondary-enabled-basic: #242428 !important;
+  --ym-controls-color-primary-text-enabled: #f1f1ef !important;
+  --ym-controls-color-primary-default-enabled: #ededeb !important;
+  --ym-controls-color-primary-default-hovered: #fff !important;
+}
+* { scrollbar-color: #55555f #17171b; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: #55555f; border-radius: 5px; }
+[class*="NavbarDesktop_logoWrapper"] { padding-block: 10px !important; }
+[class*="Content_main"] { padding-top: 12px !important; }
+@media (max-width: 960px) {
+  [class*="NavbarDesktop_root"] { max-width: 72px !important; }
+  [class*="NavbarDesktop_title"] { display: none !important; }
+  [class*="NavbarDesktop_pinsList"] { display: none !important; }
+  [class*="NavbarDesktop_logo"] { max-width: 40px !important; }
+}

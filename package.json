@@ -1,0 +1,99 @@
+{
+  "name": "capri-desktop",
+  "version": "0.6.11",
+  "description": "Capri, the Project Capricorn construct, living on your desktop and narrating what Codex is doing.",
+  "author": "mochiiwuff",
+  "repository": "github:dark-anishi/capri-desktop-noir",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test scripts/test-*.cjs",
+    "demo": "node scripts/demo.js",
+    "hooks:install": "node scripts/install-hooks.js",
+    "hooks:uninstall": "node scripts/install-hooks.js --uninstall",
+    "vpn:prepare": "node tools/prepare-vpn.cjs && node tools/build-native.cjs",
+    "predist": "npm run vpn:prepare",
+    "dist": "electron-builder --win --x64"
+  },
+  "keywords": [
+    "codex",
+    "desktop-pet",
+    "electron",
+    "cyberpunk",
+    "edgerunners"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^44.9.3",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "@fontsource/chakra-petch": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "yaml": "^2.9.1"
+  },
+  "build": {
+    "appId": "capri.desktop",
+    "productName": "Capri",
+    "files": [
+      "src/**",
+      "assets/**",
+      "hooks/**",
+      "scripts/**",
+      "package.json",
+      "LICENSE",
+      "THIRD-PARTY.md"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/mihomo",
+        "to": "vpn",
+        "filter": [
+          "mihomo.exe",
+          "manifest.json",
+          "LICENSE",
+          "source.tar.gz",
+          "vendor.tar.gz"
+        ]
+      },
+      {
+        "from": "native/bin",
+        "to": "native",
+        "filter": [
+          "Capri.Windows.exe",
+          "manifest.json"
+        ]
+      },
+      {
+        "from": "native/service-control.ps1",
+        "to": "native/service-control.ps1"
+      },
+      {
+        "from": "docs/vpn",
+        "to": "vpn-docs"
+      }
+    ],
+    "asarUnpack": [
+      "hooks/**",
+      "src/main/windows.ps1"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/capri-mono.ico"
+    },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Capri",
+      "artifactName": "Capri-Setup-${version}.${ext}"
+    }
+  }
+}

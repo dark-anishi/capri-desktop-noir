@@ -1,0 +1,23 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+Thumbs.db
+
+# local debug captures
+captures/
+native/bin/
+vendor/mihomo/*.exe
+vendor/mihomo/*.zip
+vendor/mihomo/*.tar.gz
+vendor/mihomo/extracted/
+
+# Local credentials and runtime data must never be published.
+.env
+.env.*
+!.env.example
+*.dat
+*.lnk
+*.url
+*.capri-backup-*

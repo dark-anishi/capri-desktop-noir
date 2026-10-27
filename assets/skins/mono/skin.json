@@ -1,0 +1,11 @@
+{
+  "id": "mono",
+  "name": "NOIR",
+  "source": "capri",
+  "filter": "silver-white palette",
+  "preserves": [
+    "geometry",
+    "alpha",
+    "animation rig"
+  ]
+}
