@@ -25,13 +25,16 @@ async function api(endpoint, options = {}) {
     const repo = await api(base), commit = await api(base + '/commits/main');
     const release = await api(base + '/releases/tags/v' + version);
     const screenshots = await api(base + '/contents/docs/screenshots/' + version);
-    const expected = ['apps.jpg', 'apps-context.jpg', 'folders.jpg', 'music.jpg', 'skins.jpg', 'vpn.jpg'];
+    const expected = ['apps.jpg', 'apps-context.jpg', 'folders.jpg', 'music.jpg', 'skins.jpg', 'vpn.jpg', 'quick-menu.png'];
     if (!repo.private || expected.some(name => !screenshots.some(file => file.name === name))) throw new Error('Repository or screenshot verification failed.');
+    const animations = await api(base + '/contents/docs/animations/' + version);
+    const expectedAnimations = ['seated.gif', 'music.gif', 'sleep.gif', 'gaze.gif', 'thinking.gif', 'wave.gif'];
+    if (expectedAnimations.some(name => !animations.some(file => file.name === name))) throw new Error('Animation verification failed.');
     for (const name of [`Capri-Setup-${version}.exe`, 'SHA256SUMS.txt']) {
       const asset = release.assets.find(item => item.name === name);
       if (!asset || asset.size !== fs.statSync(path.join(root, 'dist', name)).size) throw new Error('Release asset missing or incomplete: ' + name);
     }
-    console.log(JSON.stringify({ repository: repo.html_url, private: repo.private, commit: commit.sha, release: release.html_url, screenshots: expected.length, assets: release.assets.map(asset => ({ name: asset.name, size: asset.size, digest: asset.digest })) }));
+    console.log(JSON.stringify({ repository: repo.html_url, private: repo.private, commit: commit.sha, release: release.html_url, screenshots: expected.length, animations: expectedAnimations.length, assets: release.assets.map(asset => ({ name: asset.name, size: asset.size, digest: asset.digest })) }));
     return;
   }
   if (command === 'create') {
