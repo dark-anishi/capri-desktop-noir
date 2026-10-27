@@ -6,7 +6,7 @@ Capri живёт на рабочем столе: сидит на краю окн
 
 Это самостоятельное развитие [Capri Desktop от mochiiwuff](https://github.com/mochiiwuff/capri-desktop). Авторство, происхождение проекта и исключения из лицензии сохранены в [разделе об авторах](#авторы-и-лицензии).
 
-[Скачать](https://github.com/dark-anishi/capri-desktop-noir/releases/latest) · [Версия на русском](README.ru.md) · [Новые скриншоты](docs/SCREENSHOTS.md) · [Документация](docs/README.md) · [Изменения](CHANGELOG.md)
+[Скачать](https://github.com/dark-anishi/capri-desktop-noir/releases/latest) · [Новые скриншоты](docs/SCREENSHOTS.md) · [Документация](docs/README.md) · [Изменения](CHANGELOG.md)
 
 ## Всё под рукой
 
