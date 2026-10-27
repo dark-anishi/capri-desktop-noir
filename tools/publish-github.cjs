@@ -25,7 +25,7 @@ async function api(endpoint, options = {}) {
     const repo = await api(base), commit = await api(base + '/commits/main');
     const release = await api(base + '/releases/tags/v' + version);
     const screenshots = await api(base + '/contents/docs/screenshots/' + version);
-    const expected = ['apps.jpg', 'apps-context.jpg', 'folders.jpg', 'music.jpg', 'skins.jpg', 'vpn.jpg', 'quick-menu.png'];
+    const expected = ['apps.png', 'apps-context.png', 'folders.png', 'music.png', 'skins.png', 'vpn.png', 'quick-menu.png'];
     if (!repo.private || expected.some(name => !screenshots.some(file => file.name === name))) throw new Error('Repository or screenshot verification failed.');
     const animations = await api(base + '/contents/docs/animations/' + version);
     const expectedAnimations = ['seated.gif', 'music.gif', 'sleep.gif', 'gaze.gif', 'thinking.gif', 'wave.gif'];
