@@ -38,6 +38,9 @@ const root = path.resolve(__dirname, '..');
     // Keep the fixture visible while the user can work in another desktop app.
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('/quick/'));
+      // Electron can install its own blur listeners before the menu's listener.
+      global.quickFixture.blur = win.listeners('blur').find(listener => String(listener).includes('setTimeout(hide'));
+      if (!global.quickFixture.blur) throw new Error('Quick menu blur handler unavailable');
       win.removeAllListeners('blur'); win.emit('focus'); win.show();
     });
     await quick.waitForFunction(() => innerHeight-document.getElementById('quick-open').getBoundingClientRect().bottom<=26);
@@ -49,6 +52,32 @@ const root = path.resolve(__dirname, '..');
     // Windows may add a few DIP of invisible non-client bounds around a frameless toolbar.
     assert.ok(bounds.bounds.height < 630, JSON.stringify({ bounds, layout }));
     assert.ok(bounds.bounds.y >= bounds.area.y - 8); assert.ok(bounds.bounds.y + bounds.bounds.height <= bounds.area.y + bounds.area.height + 8);
+    const waitVisible = (visible) => app.evaluate(async ({ BrowserWindow }, visible) => {
+      const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('/quick/'));
+      for (let i = 0; i < 50; i++) { if (win.isVisible() === visible) return; await new Promise(resolve => setTimeout(resolve, 20)); }
+      throw new Error(`Quick menu visibility did not become ${visible}`);
+    }, visible);
+    const reopen = async (close, name) => {
+      await close(); await waitVisible(false);
+      await overlay.evaluate(() => window.host.openQuickMenu()); await waitVisible(true);
+      await quick.waitForFunction(() => innerHeight-document.getElementById('quick-open').getBoundingClientRect().bottom<=26, null, { timeout: 2000 });
+      const reopened = await quick.evaluate(() => ({ height:innerHeight, last:document.getElementById('quick-open').getBoundingClientRect().bottom, overflow:document.getElementById('items').scrollHeight-document.getElementById('items').clientHeight }));
+      assert.equal(reopened.overflow, 0, name); assert.ok(reopened.height-reopened.last<=26, name + ': ' + JSON.stringify(reopened));
+      const width = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('/quick/')).getBounds().width);
+      assert.ok(Math.abs(width-bounds.bounds.width)<=1, name + ': popup width drifted');
+    };
+    // The unchanged model used to retain the renderer's fit cache while the main
+    // process reset the reused window to 575 DIP. Exercise the real close/reopen IPC.
+    for (let i=0; i<3; i++) await reopen(() => quick.keyboard.press('Escape'), 'Escape reopen ' + i);
+    await reopen(() => quick.locator('#close').click(), 'Close-button reopen');
+    await reopen(() => quick.locator('header').click({button:'middle'}), 'Middle-button reopen');
+    await reopen(() => overlay.evaluate(() => window.host.openQuickMenu()), 'Character-toggle reopen');
+    await reopen(async () => {
+      // Let the preceding show/focus notification settle before simulating loss
+      // of focus; a real following focus would correctly cancel the blur timer.
+      await quick.waitForTimeout(250);
+      await app.evaluate(() => global.quickFixture.blur());
+    }, 'Blur-handler reopen');
     await quick.locator('#quick-zapret-toggle').click();
     await quick.getByRole('button', { name: 'Zapret — подожди…', exact: true }).waitFor();
     assert.equal(await quick.locator('#quick-vpn-toggle').innerText(), 'Подключить VPN'); assert.equal(await quick.locator('#quick-vpn-toggle').isEnabled(), true);
@@ -72,6 +101,8 @@ const root = path.resolve(__dirname, '..');
       return { overflow:root.scrollHeight-root.clientHeight,last:document.getElementById('quick-open').getBoundingClientRect().bottom,edge:root.getBoundingClientRect().bottom,scrollingLists:[...root.querySelectorAll(':scope > details[open] > .submenu')].filter(list=>list.scrollHeight>list.clientHeight).length };
     });
     assert.equal(expandedLayout.overflow, 0); assert.ok(expandedLayout.last <= expandedLayout.edge); assert.ok(expandedLayout.scrollingLists >= 1);
+    await reopen(() => quick.keyboard.press('Escape'), 'Expanded-menu reopen');
+    assert.equal(await quick.locator('#items > details[open]').count(), 2);
     await quick.waitForFunction(() => innerHeight-document.getElementById('quick-open').getBoundingClientRect().bottom<=26);
     assert.equal(await quick.evaluate(() => document.documentElement.scrollHeight === innerHeight && document.body.scrollTop === 0 && getComputedStyle(document.body).overflow === 'hidden'), true);
     await app.evaluate(() => { global.quickFixture.zapretError='Fixture Zapret error: ' + 'Long diagnostic path and strategy details. '.repeat(80); global.quickFixture.refreshZapret(); });
@@ -87,7 +118,7 @@ const root = path.resolve(__dirname, '..');
     await quick.screenshot({ path: path.join(root, 'captures/quick-menu-compact.png'), timeout: 10000 });
     await quick.keyboard.press('Escape');
     assert.deepEqual(errors, []);
-    console.log('QUICK LAYOUT UI PASS: measured compact height without blank tail/global scroll, grows/shrinks with capped submenus, work-area bounds, independent Zapret/VPN operations, no inline raw errors or console, no renderer errors. No real networking/UAC.');
+    console.log('QUICK LAYOUT UI PASS: compact repeated reopen after Escape, close button, middle button, character toggle and blur handler; expanded submenus preserved; no blank tail/global scroll or width drift, capped submenus, work-area bounds, independent Zapret/VPN operations, no inline raw errors or console, no renderer errors. No real networking/UAC; native focus changes are not automated.');
   } catch (error) {
     if (app) for (const page of app.windows()) if (page.url().includes('/quick/')) console.error('Layout diagnostics', await page.evaluate(() => ({ height:innerHeight,body:document.body.getBoundingClientRect().height,root:document.getElementById('items').getBoundingClientRect().height,overflow:document.getElementById('items').scrollHeight-document.getElementById('items').clientHeight,last:document.getElementById('quick-open').getBoundingClientRect().bottom,submenus:[...document.querySelectorAll('#items > details[open] > .submenu')].map(item=>({height:item.getBoundingClientRect().height,max:item.style.maxHeight})) })));
     throw error;

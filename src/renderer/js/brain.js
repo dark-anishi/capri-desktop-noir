@@ -75,8 +75,10 @@ export class Brain {
       }
     }
     // these three put her somewhere themselves; anything else just brings her out of hiding
-    if (name === 'UserPromptSubmit' || name === 'Stop' || name === 'Notification') this.capri.wake();
-    else this.capri.attend();
+    if (!this.capri.gameQuiet && !this.capri.gameMode) {
+      if (name === 'UserPromptSubmit' || name === 'Stop' || name === 'Notification') this.capri.wake();
+      else this.capri.attend();
+    }
 
     // anything happening after a permission prompt means it was answered
     if (s.waiting && name !== 'Notification') {
@@ -124,7 +126,8 @@ export class Brain {
     // the window in front when you send a prompt is the one you typed it in: Codex's
     const window = this.capri.windows.fg || null;
     Object.assign(s, { taskStart: Date.now(), count: 0, files: new Set(), log: [], working: true, window });
-    this.capri.goToWork(); // perched on the window in front if she can, else her corner
+    if (this.capri.gameQuiet || this.capri.gameMode) this.capri.setMode('work');
+    else this.capri.goToWork(); // perched on the window in front if she can, else her corner
     const prompt = String(evt.prompt || '').replace(/\s+/g, ' ').trim();
     this.say('work', pick(this.t.prompt), s, { quote: prompt ? clip(prompt, 110) : '', hold: 4500 });
   }
@@ -142,8 +145,10 @@ export class Brain {
       for (const changed of evt.tool_input?.files || []) s.files.add(changed);
     }
     if (this.capri.mode !== 'alert') this.capri.setMode('work');
-    this.capri.pulse();
-    if (HACKING_TOOLS.has(evt.tool_name)) this.capri.spark(); // red sparks: she's in the system
+    if (!this.capri.gameQuiet && !this.capri.gameMode) {
+      this.capri.pulse();
+      if (HACKING_TOOLS.has(evt.tool_name)) this.capri.spark(); // red sparks: she's in the system
+    }
     this.panel.setTicker(action);
     if (this.panel.current?.kind === 'work') this.panel.updateLog(s.log);
     if (s.count % WORKING_EVERY === 0) {
@@ -161,7 +166,7 @@ export class Brain {
     // "Exit code 1" says nothing; the next line usually does
     const lines = String(evt.error || '').split('\n').map((l) => l.trim()).filter(Boolean);
     const firstLine = lines.find((l) => !/^exit code \d+$/i.test(l)) || lines[0] || '';
-    this.capri.hurt();
+    if (!this.capri.gameQuiet && !this.capri.gameMode) this.capri.hurt();
     this.voice.play('error');
     this.say('error', fmt(pick(this.t.error), { tool: evt.tool_name || 'outil' }), s, {
       face: pick(['laugh', 'wide']), // a failure: she laughs at the chaos, or it caught her off guard
@@ -182,6 +187,10 @@ export class Brain {
       const lines = question ? (this.t.question || this.t.waiting) : this.t.permission;
       this.capri.setMode('alert');
       this.voice.play('alert');
+      if (this.capri.gameQuiet || this.capri.gameMode) {
+        this.say('alert', pick(lines), s, { quote: evt.message || '', hold: null });
+        return;
+      }
       // you're on another window: she goes and points at Codex's, where the question is
       const win = this.away(s) && this.capri.windows.wins.find((w) => w.id === s.window);
       if (win && this.capri.canPoint(win)) {
@@ -223,6 +232,7 @@ export class Brain {
       this.panel.setTicker(null);
       this.capri.setMode('idle');
     }
+    if (this.capri.gameQuiet || this.capri.gameMode) { this.replyFor = null; return; }
     // Not on Codex's window any more: you can't see the answer, so she brings it to you, whole,
     // and holds it up until you're back on Codex's window or click it away.
     const reply = this.away(s) ? readable(evt.last_assistant_message || '') : '';
@@ -268,7 +278,7 @@ export class Brain {
       this.panel.setTicker(null);
       this.capri.setMode('idle');
     }
-    this.capri.hurt();
+    if (!this.capri.gameQuiet && !this.capri.gameMode) this.capri.hurt();
     this.voice.play('error');
     const detail = evt.error || evt.message || '';
     this.say('error', pick(this.t.crashed), s, { face: 'wide', quote: clip(String(detail), 120), hold: 9000 });

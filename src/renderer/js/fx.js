@@ -237,6 +237,15 @@ export class FxLayer {
     return item;
   }
 
+  clear() {
+    const pending = this.items;
+    this.items = [];
+    // Cancelling a visual must also release its awaiting character operation.
+    // Otherwise an interrupted intro can leave the pet permanently busy.
+    for (const item of pending) item.done?.();
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   // ---------- shards and light ----------
 
   // Shards thrown out (or sucked in) around a point.
@@ -493,7 +502,7 @@ export class FxLayer {
     // the dive swings out toward the middle of the screen and back in to her
     const ctrl = { x: Math.min(at.x, to.x) - S * 0.6, y: lerp(at.y, to.y, 0.3) };
     return new Promise((land) => {
-      this.add({ type: 'intro', life: FRAME_MS * (INTRO_T.end + 1), S, at, to, ctrl, label, caption, still, onCue, land, cued: -1 });
+      this.add({ type: 'intro', life: FRAME_MS * (INTRO_T.end + 1), S, at, to, ctrl, label, caption, still, onCue, land, done: land, cued: -1 });
     });
   }
 

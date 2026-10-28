@@ -53,7 +53,7 @@ test('independent quick actions run concurrently while duplicate operations stay
   let win, releaseZapret, releaseVpn;
   class Window extends EventEmitter {
     constructor(options) { super(); this.options = options; this.webContents = Object.assign(new EventEmitter(), { send() {}, setWindowOpenHandler() {} }); win = this; }
-    setAlwaysOnTop() {} loadURL() {} isDestroyed() { return false; } isVisible() { return true; } destroy() {} hide() {}
+    setAlwaysOnTop() {} loadURL() {} isDestroyed() { return false; } isVisible() { return true; } destroy() {} hide() {} show() {} focus() {}
     setResizable(value) { this.resizable = value; } getBounds() { return { ...this.options }; } setBounds(bounds) { Object.assign(this.options, bounds); }
   }
   const menu = createQuickMenu({
@@ -86,6 +86,7 @@ test('independent quick actions run concurrently while duplicate operations stay
   assert.throws(() => fit({ sender: {} }, 500), /sender/);
   fit(event, 2500); assert.equal(win.options.height, 1080); assert.equal(win.options.y, 0);
   fit(event, 420); assert.equal(win.options.height, 420); assert.equal(win.resizable, false);
+  menu.hide(); menu.show(); assert.equal(win.options.height, 420, 'reopening must retain the measured content height');
   assert.equal(Object.hasOwn(state(), 'error'), false);
   menu.close();
 });

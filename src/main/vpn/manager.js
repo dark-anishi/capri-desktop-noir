@@ -163,8 +163,12 @@ class VpnManager {
       const endpoint = '127.0.0.1:' + await freePort(); const secret = crypto.randomBytes(32).toString('hex');
       const config = runtime(profile.config, settings, endpoint, secret);
       if (settings.tun.enable) {
-        const reply = await this.helper.run(['--client'], { action: 'start', config }, 50000);
+        // A timed-out pipe reply does not mean the service failed to start its
+        // core. Retain ownership before sending so the catch path can stop it.
         this.endpoint = null; this.secret = null; this.usingService = true;
+        const reply = await this.helper.run(['--client'], { action: 'start', config }, 50000);
+        if (reply.running !== true || reply.ready === false) throw new Error('Служба не подтвердила готовность ядра VPN.');
+        if (reply.ready !== true) this.log('Обнови службу Capri VPN: установленный компонент ещё не проверяет готовность сетевых портов.', 'warning');
         this.service = { installed: true, running: true };
       } else {
         await this.validate(config);
@@ -172,14 +176,22 @@ class VpnManager {
         const file = path.join(this.directory, 'runtime.json'); fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
         const generation = ++this.generation;
         this.endpoint = endpoint; this.secret = secret; this.usingService = false;
-        this.child = spawn(this.binaries.helper, ['--sidecar', this.binaries.core, this.directory, file], { windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] });
+        this.child = spawn(this.binaries.helper, ['--sidecar', this.binaries.core, this.directory, file], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+        let networkReady = false, startupOutput = '';
+        this.child.stdout.on('data', chunk => {
+          if (startupOutput.length > 4096) return;
+          startupOutput += chunk.toString('utf8');
+          for (const line of startupOutput.split(/\r?\n/)) {
+            try { const reply = JSON.parse(line); if (reply.ok === true && reply.ready === true) networkReady = true; } catch { }
+          }
+        });
         this.child.stdin.on('error', () => {});
         this.child.on('error', () => { if (generation === this.generation && this.wanted) this.scheduleReconnect(); });
         this.child.on('exit', () => { if (generation === this.generation && this.wanted) this.scheduleReconnect(); });
         for (let attempt = 0; attempt < 120; attempt++) {
           if (!this.wanted) throw new Error('Подключение отменено.');
           if (this.child.exitCode !== null) throw new Error('Ядро остановилось при запуске.');
-          try { const version = await this.api('GET', '/version'); if (!String(version.version).includes('1.19.33')) throw new Error('Версия ядра не совпадает.'); break; }
+          try { const version = await this.api('GET', '/version'); if (!String(version.version).includes('1.19.33')) throw new Error('Версия ядра не совпадает.'); if (!networkReady) throw new Error('Ядро ещё не подтвердило готовность локальных портов прокси и DNS.'); break; }
           catch (err) { if (attempt === 119) throw err; await new Promise((r) => setTimeout(r, 100)); }
         }
       }

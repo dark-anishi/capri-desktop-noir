@@ -107,6 +107,34 @@ export const ACTS = {
 
   // ---- one-shot acts ----
 
+  // Acknowledge a successful launch: two clear nods, feet/seat stay anchored.
+  acknowledge: { priority: 1, keys: [
+    [2, { head: -0.06, mane: 0.03 }], [3, { head: 0.18, mane: -0.05 }],
+    [2, { head: -0.03, mane: 0.07 }], [3, { head: 0.12, mane: 0 }], [3, {}],
+  ] },
+  // A puzzled look for a shortcut that failed; no screen travel or sparks.
+  shrug: { priority: 1, keys: [
+    [3, { head: -0.16, armL: 0.26, armR: 0.2, mane: 0.08 }],
+    [5, { head: 0.18, armL: 0.42, armR: 0.38, mane: 0.16, hair: 2 }],
+    [4, { head: 0.12, armL: 0.2, armR: 0.16, mane: 0.04 }], [3, {}],
+  ] },
+  stretch: { priority: 1, keys: [
+    [3, { head: 0.1, arms: 0.2, mane: -0.08 }],
+    [4, { head: -0.08, arms: 1.3, sy: 1.03, mane: 0.13, hair: 2 }],
+    [7, { head: -0.14, arms: 1.6, sy: 1.04, mane: 0.18, hair: 3 }],
+    [4, { head: 0.05, arms: 0.45, mane: 0.04 }], [3, {}],
+  ] },
+  // A smaller neck/mane stretch on a ledge: no standing pose or lifting hips.
+  unwind: { priority: 1, keys: [
+    [4, { head: -0.18, mane: -0.06, hair: -2, kickL: 0, kickR: 0 }],
+    [5, { head: 0.2, mane: 0.1, hair: 2, kickL: 0, kickR: 0 }],
+    [4, { head: -0.08, mane: 0.06, hair: 0, kickL: 0, kickR: 0 }], [3, {}],
+  ] },
+  settle: { priority: 1, keys: [
+    [4, { head: 0.12, mane: 0.03, hair: 1, kickL: 0, kickR: 0 }],
+    [6, { head: -0.06, mane: -0.1, hair: 0, kickL: 0, kickR: 0 }], [5, {}],
+  ] },
+
   // little nods while the words come out, two drawings on threes
   talk: { priority: 0, keys: rep(2, [[3, { head: 0.04, mane: 0.08 }], [3, { head: 0, mane: 0.03 }]]) },
 

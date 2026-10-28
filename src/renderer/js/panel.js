@@ -47,6 +47,7 @@ export class Panel {
     this.onChar = null;    // (mood) => void, for the voice blips
     this.onTalk = null;    // (talking: boolean) => void
     this.suspended = false;
+    this.quiet = false;
     this.tickerAction = null;
     this.tickerShownAt = 0;
     this.tickerTimer = null;
@@ -58,7 +59,7 @@ export class Panel {
   }
 
   get visible() {
-    return !this.el.hidden && !this.suspended && !this.leaving;
+    return !this.quiet && !this.el.hidden && !this.suspended && !this.leaving;
   }
 
   // Message: { kind, line, tag, quote, reply, summary, log: [{verb, target, error}], actions, guide,
@@ -69,6 +70,11 @@ export class Panel {
   // badge: the word in the corner, instead of the one for its kind
   // face: her expression (a key of FACES), instead of the one for its kind
   say(msg) {
+    if (this.quiet) {
+      // Keep only a still-pending question; routine/game-time chatter is dropped.
+      if (msg.kind === 'alert') this.current = { ...msg, at: performance.now() };
+      return false;
+    }
     const cur = this.current;
     if (cur && this.visible && cur.kind !== msg.kind && PRIORITY[cur.kind] > PRIORITY[msg.kind] && performance.now() - cur.at < 2600) {
       return false; // don't step on something more important that just appeared
@@ -173,7 +179,26 @@ export class Panel {
 
   // Only drop a sticky alert (permission prompt) once it has been dealt with.
   clearKind(kind) {
-    if (this.current?.kind === kind) this.hide();
+    if (this.current?.kind === kind) {
+      if (this.quiet) this.current = null;
+      else this.hide();
+    }
+  }
+
+  setQuiet(on) {
+    on = Boolean(on);
+    if (on === this.quiet) return;
+    const pending = this.current?.kind === 'alert' ? this.current : null;
+    this.quiet = on;
+    clearTimeout(this.hideTimer); clearInterval(this.decodeTimer);
+    this.onTalk?.(false);
+    this.current = pending; this.leaving = false; this.el.hidden = true;
+    if (on) this.suspend();
+    else {
+      this.current = null; this.resume();
+      if (pending) this.say({ ...pending, silent: true });
+      else this.setTicker(this.tickerAction);
+    }
   }
 
   suspend() {
@@ -183,6 +208,7 @@ export class Panel {
   }
 
   resume() {
+    if (this.quiet) return;
     this.suspended = false;
     this.el.style.visibility = '';
     this.tickerEl.style.visibility = '';

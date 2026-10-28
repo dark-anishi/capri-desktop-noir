@@ -2,6 +2,7 @@
 // Real Windows Mihomo + owned sidecar smoke. No elevation, TUN or remote VPN account.
 const assert = require('node:assert/strict');
 const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path'); const http = require('node:http');
+require('./loopback-vpn-fixture.cjs');
 const { VpnManager, freePort } = require('../src/main/vpn/manager');
 (async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-core-'));
@@ -49,5 +50,5 @@ const { VpnManager, freePort } = require('../src/main/vpn/manager');
       assert.equal(fresh.state().proxies.find((p) => p.name === 'CAPRI').now, 'Fixture', 'a fresh manager must load and restore the last location from disk');
     } finally { await fresh.close(); }
     console.log('REAL CORE PASS: verified Mihomo 1.19.33 resolves a real port conflict without touching the other listener, persists its new port, starts, authenticates, switches proxy, forwards actual local HTTP traffic, stops, restarts and restores the last server after both a core crash and a fresh manager loading persisted data. TUN was NOT enabled.');
-  } finally { await manager.close(); await new Promise((resolve) => origin.close(resolve)); await new Promise((resolve) => occupied.close(resolve)); fs.rmSync(temp, { recursive: true, force: true }); }
+  } finally { await manager.close(); await new Promise((resolve) => origin.close(resolve)); await new Promise((resolve) => occupied.close(resolve)); assert.ok(temp.startsWith(path.join(os.tmpdir(), 'capri-core-'))); fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); }
 })().catch((err) => { console.error(err.message); process.exitCode = 1; });

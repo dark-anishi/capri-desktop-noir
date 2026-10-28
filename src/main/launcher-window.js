@@ -87,7 +87,7 @@ function createLauncher({ config, rendererConfig, updateConfig, sendCommand, ope
     ipcMain.handle(`launcher:${name}`, async (event, ...args) => {
       if (!win || event.sender !== win.webContents) throw new Error('Invalid launcher sender');
       try { return { ok: true, ...await fn(...args) }; }
-      catch (err) { speak('error', { error: err.message }); return { ok: false, error: err.message }; }
+      catch (err) { speak(name === 'launch' ? 'launchError' : 'error', { error: err.message }); return { ok: false, error: err.message }; }
     });
   }
   handle('state', state);
@@ -204,6 +204,6 @@ function createLauncher({ config, rendererConfig, updateConfig, sendCommand, ope
       return { ok: true };
     } catch (err) { speak('error', { error: err.message }); return { ok: false, error: err.message }; }
   }
-  return { open, openQuick: (window) => quick.show(window), acceptDrop, petChanged: (state) => { win?.webContents.send('launcher:pet-state', state); quick.refresh(); }, vpnChanged: (state) => { win?.webContents.send('launcher:vpn-state', state); quick.refresh(); vpnNarrate(state); }, zapretChanged: () => quick.refresh(), configChanged: () => win?.webContents.send('launcher:refresh'), close: () => { quick.close(); win?.destroy(); } };
+  return { open, openQuick: (window) => quick.show(window), hideQuick: () => quick.hide(), acceptDrop, petChanged: (state) => { win?.webContents.send('launcher:pet-state', state); quick.refresh(); }, vpnChanged: (state) => { win?.webContents.send('launcher:vpn-state', state); quick.refresh(); vpnNarrate(state); }, zapretChanged: () => quick.refresh(), configChanged: () => win?.webContents.send('launcher:refresh'), close: () => { quick.close(); win?.destroy(); } };
 }
 module.exports = { createLauncher };

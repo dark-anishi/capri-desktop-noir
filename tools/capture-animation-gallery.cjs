@@ -6,7 +6,9 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawnSync } = require('node:child_process');
 const { _electron } = require(process.env.CAPRI_PLAYWRIGHT_PATH || 'playwright');
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'docs', 'animations', '0.6.11');
+const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const output = path.join(root, 'docs', 'animations', version);
+const reactions = process.argv.includes('--reactions');
 const python = process.env.CAPRI_PYTHON || 'python';
 (async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-animation-gallery-'));
@@ -14,7 +16,7 @@ const python = process.env.CAPRI_PYTHON || 'python';
   fs.writeFileSync(path.join(temp, 'config.json'), JSON.stringify({ welcomed: true, linked: true, muted: true, wander: false, possess: false, skin: 'mono', lang: 'ru', scale: 1 }));
   try {
     app = await _electron.launch({ executablePath: path.join(root, 'dist/win-unpacked/Capri.exe'), args: ['--dev'], cwd: root, env: { ...process.env, CAPRI_TEST_DATA: temp, CAPRI_PORT: '47834' } });
-    assert.equal(await app.evaluate(({ app }) => app.getVersion()), '0.6.11');
+    assert.equal(await app.evaluate(({ app }) => app.getVersion()), version);
     const page = await app.firstWindow(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.waitForFunction(() => document.getElementById('sprite')?.dataset.pose === 'original');
@@ -42,7 +44,10 @@ const python = process.env.CAPRI_PYTHON || 'python';
       const ledge = document.createElement('div'); ledge.id = 'gallery-ledge'; document.body.prepend(ledge);
     });
     fs.mkdirSync(output, { recursive: true });
-    const clips = [
+    const clips = reactions ? [
+      ['acknowledge', 'original'], ['shrug', 'original'], ['stretch', 'original'],
+      ['unwind', 'seated'], ['settle', 'seated'],
+    ] : [
       ['seated', 'seated'], ['music', 'musicSeated'], ['sleep', 'sleepLying'],
       ['gaze', 'gazeSeated'], ['thinking', 'thinking'], ['wave', 'wave'],
     ];
@@ -51,7 +56,7 @@ const python = process.env.CAPRI_PYTHON || 'python';
         const c = galleryPet;
         c.endAct(false); c.wake(); c.setMusicPlaying(false); c.setMode('idle'); c.setStance('stand');
         c.pos = { x: 480, y: 610 }; c.facing = 1; c.p.alpha = 1;
-        const seated = ['seated', 'music', 'gaze'].includes(name);
+        const seated = ['seated', 'music', 'gaze', 'unwind', 'settle'].includes(name);
         document.getElementById('gallery-ledge').hidden = !seated;
         if (seated) {
           const win = { id: -611, x: 200, y: 440, w: 600, h: 234, max: false };
@@ -61,7 +66,7 @@ const python = process.env.CAPRI_PYTHON || 'python';
         if (name === 'music') c.setMusicPlaying(true);
         if (name === 'sleep') { c.pos.y = 575; c.rest(); }
         if (name === 'thinking') c.setMode('alert');
-        if (name === 'gaze' || name === 'wave') void c.perform(name);
+        if (['gaze', 'wave', 'acknowledge', 'shrug', 'stretch', 'unwind', 'settle'].includes(name)) void c.perform(name);
         c.drawFrame();
       }, name);
       await page.waitForFunction(expected => document.getElementById('sprite').dataset.pose === expected, expected);
@@ -70,7 +75,7 @@ const python = process.env.CAPRI_PYTHON || 'python';
       for (let i = 0; i < 40; i++) {
         const started = Date.now();
         // Repeat a gesture only when its real exposure sheet has completed.
-        if (name === 'gaze' || name === 'wave') await page.evaluate(name => { if (!galleryPet.act) void galleryPet.perform(name); }, name);
+        if (['gaze', 'wave', 'acknowledge', 'shrug', 'stretch', 'unwind', 'settle'].includes(name)) await page.evaluate(name => { if (!galleryPet.act) void galleryPet.perform(name); }, name);
         poses.add(await page.locator('#sprite').getAttribute('data-pose'));
         await page.screenshot({ path: path.join(frames, String(i).padStart(3, '0') + '.png'), clip: { x: 0, y: 0, width: 960, height: 720 }, animations: 'allow' });
         await page.waitForTimeout(Math.max(1, 100 - (Date.now() - started)));

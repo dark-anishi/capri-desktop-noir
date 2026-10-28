@@ -15,6 +15,8 @@ export class Voice {
     this.ctx = null;
     this.master = null;
     this.muted = false;
+    this.suppressed = false;
+    this.sources = new Set();
     this.volume = 0.7;
     this.custom = new Map(); // cue -> AudioBuffer
     this.lastBlip = 0;
@@ -25,7 +27,7 @@ export class Voice {
     const ctx = new AudioContext();
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = this.volume;
+    this.master.gain.value = this.suppressed ? 0 : this.volume;
     // soft clip so stacked cues never get harsh
     const shaper = ctx.createWaveShaper();
     const curve = new Float32Array(1024);
@@ -43,8 +45,23 @@ export class Voice {
     if (typeof muted === 'boolean') this.muted = muted;
     if (typeof volume === 'number') {
       this.volume = volume;
-      if (this.master) this.master.gain.value = volume;
+      if (this.master) this.master.gain.value = this.suppressed ? 0 : volume;
     }
+  }
+
+  setSuppressed(on) {
+    this.suppressed = Boolean(on);
+    if (this.master) this.master.gain.value = this.suppressed ? 0 : this.volume;
+    if (this.suppressed) {
+      for (const source of this.sources) { try { source.stop(); } catch { /* Already ended. */ } }
+      this.sources.clear();
+    }
+  }
+
+  track(source) {
+    this.sources.add(source);
+    source.addEventListener('ended', () => this.sources.delete(source), { once: true });
+    return source;
   }
 
   async loadCustom(list) {
@@ -62,7 +79,7 @@ export class Voice {
   }
 
   play(cue, opts = {}) {
-    if (this.muted) return;
+    if (this.muted || this.suppressed) return;
     const ctx = this.ensure();
     if (ctx.state === 'suspended') ctx.resume();
     const custom = this.custom.get(cue);
@@ -70,7 +87,7 @@ export class Voice {
       const src = ctx.createBufferSource();
       src.buffer = custom;
       src.connect(this.master);
-      src.start();
+      this.track(src).start();
       return;
     }
     const fn = {
@@ -114,7 +131,7 @@ export class Voice {
     o.frequency.setValueAtTime(freq, t);
     this.env(g, t, 0.004, peak, dur);
     o.connect(g).connect(dest);
-    o.start(t);
+    this.track(o).start(t);
     o.stop(t + dur + 0.05);
     return o;
   }
@@ -131,7 +148,7 @@ export class Voice {
     const g = ctx.createGain();
     this.env(g, t, 0.005, peak, dur);
     src.connect(bp).connect(g).connect(this.master);
-    src.start(t, rand(0, 0.5));
+    this.track(src).start(t, rand(0, 0.5));
     src.stop(t + dur + 0.05);
   }
 
@@ -187,7 +204,7 @@ export class Voice {
     g.gain.exponentialRampToValueAtTime(0.07, t + 0.55);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.66);
     o.connect(g).connect(this.master);
-    o.start(t);
+    this.track(o).start(t);
     o.stop(t + 0.7);
     for (let i = 0; i < 6; i++) this.noiseBurst(t + 0.08 + i * 0.09, 0.02, 0.04 + i * 0.016, 3000, 7000, 6);
   }

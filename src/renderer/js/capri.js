@@ -551,7 +551,7 @@ export class Capri {
 
   // Play an act from acting.js. Resolves when it's over (or cut off by a stronger one).
   perform(name, dir = 0, { reach = 1 } = {}) {
-    if (this.stowed || this.dormant) return Promise.resolve(); // nobody to act: she's in her biochip, or just her mask
+    if (this.gameMode || this.stowed || this.dormant) return Promise.resolve(); // no gestures while a game owns the screen
     const act = ACTS[name];
     if (reducedMotion.matches && act.fps === 24) {
       if (act.flip) this.facing *= -1;

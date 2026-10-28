@@ -10,7 +10,7 @@ if (hash !== 'a4fbf2b8bc2b5416ce2d0d392ac59f2e0a234ea4fcf635b66bd21e62ea9641b9')
 const out = path.join(root, 'native/bin'); fs.mkdirSync(out, { recursive: true });
 const generated = path.join(out, 'BuildInfo.cs');
 fs.writeFileSync(generated, `namespace CapriWindows { static class BuildInfo { public const string CoreSha256 = "${hash}"; } }`);
-execFileSync('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe', ['/nologo', '/target:exe', '/platform:x64', '/optimize+', '/out:' + path.join(out, 'Capri.Windows.exe'), '/r:System.ServiceProcess.dll', '/r:System.Web.Extensions.dll', '/r:System.Drawing.dll', path.join(root, 'native/Capri.Windows.cs'), path.join(root, 'native/WindowTracker.cs'), path.join(root, 'native/ZapretHost.cs'), generated], { stdio: 'inherit', windowsHide: true });
+execFileSync('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe', ['/nologo', '/target:exe', '/platform:x64', '/optimize+', '/out:' + path.join(out, 'Capri.Windows.exe'), '/r:System.ServiceProcess.dll', '/r:System.Web.Extensions.dll', '/r:System.Drawing.dll', path.join(root, 'native/Capri.Windows.cs'), path.join(root, 'native/WindowTracker.cs'), path.join(root, 'src/main/window-activity.cs'), path.join(root, 'native/ZapretHost.cs'), generated], { stdio: 'inherit', windowsHide: true });
 const helper = crypto.createHash('sha256').update(fs.readFileSync(path.join(out, 'Capri.Windows.exe'))).digest('hex');
 fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ helperSha256: helper, coreSha256: hash, version: '1.19.33' }, null, 2));
 console.log('Windows helper and TUN service compiled.');

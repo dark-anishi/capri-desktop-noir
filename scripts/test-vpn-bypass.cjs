@@ -1,6 +1,7 @@
 'use strict';
 // Real core routing proof using only owned loopback origins/proxies. No TUN or real subscription.
 const assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http');
+require('./loopback-vpn-fixture.cjs');
 const { VpnManager, freePort } = require('../src/main/vpn/manager');
 (async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-bypass-test-'));
@@ -40,6 +41,6 @@ const { VpnManager, freePort } = require('../src/main/vpn/manager');
     assert.equal((await request('s77.storage.yandex.net')).body, 'PROXY_ORIGIN', 'removing music bypass must also remove its CDN exceptions');
     console.log('REAL BYPASS PASS: listed domain/subdomain DIRECT, other and lookalike hosts through GLOBAL, rule-mode precedence, and removal verified with actual HTTP traffic. Music API/storage/CDN bypass and unrelated/lookalike isolation also verified. No TUN or remote traffic.');
   } finally {
-    await manager.close(); await new Promise((r) => direct.close(r)); await new Promise((r) => upstream.close(r)); fs.rmSync(root, { recursive: true, force: true });
+    await manager.close(); await new Promise((r) => direct.close(r)); await new Promise((r) => upstream.close(r)); assert.ok(root.startsWith(path.join(os.tmpdir(), 'capri-bypass-test-'))); fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 })().catch((err) => { console.error(err.message); process.exitCode = 1; });

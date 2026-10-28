@@ -89,7 +89,7 @@ static class WindowTracker {
 
   public static string Snapshot(long self) {
     var sb = new StringBuilder();
-    sb.Append("{\"fg\":").Append(GetForegroundWindow().ToInt64()).Append(",\"wins\":[");
+    sb.Append("{\"fg\":").Append(GetForegroundWindow().ToInt64()).Append(",\"activity\":").Append(ForegroundActivity.Json(self)).Append(",\"wins\":[");
     int count = 0;
     EnumWindows((h, l) => {
       if (count >= 40) return false;

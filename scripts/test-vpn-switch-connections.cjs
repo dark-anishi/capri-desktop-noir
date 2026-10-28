@@ -1,6 +1,7 @@
 'use strict';
 const { test } = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), http = require('node:http'), net = require('node:net');
+require('./loopback-vpn-fixture.cjs');
 const { VpnManager, freePort } = require('../src/main/vpn/manager');
 
 test('selecting another location closes existing tunnels and reconnects through the new proxy without restarting the core', { timeout: 20000 }, async () => {
@@ -57,6 +58,6 @@ test('selecting another location closes existing tunnels and reconnects through 
   } finally {
     await manager.close(); for (const socket of sockets) socket.destroy();
     await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
-    assert.ok(temp.startsWith(path.join(os.tmpdir(), 'capri-switch-core-'))); fs.rmSync(temp, { recursive: true, force: true });
+    assert.ok(temp.startsWith(path.join(os.tmpdir(), 'capri-switch-core-'))); fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });

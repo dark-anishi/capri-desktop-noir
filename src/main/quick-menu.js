@@ -40,7 +40,7 @@ function quickTemplate({ vpn, pet, music, zapret, busy = {} }, actions) {
   ];
 }
 function createQuickMenu({ BrowserWindow, ipcMain, screen, getVpn, getZapret, getPetState, getMusicState, open, pin, rest, musicToggle, musicPrevious, musicNext, musicVolume, onError }) {
-  let win = null, blurTimer = null, items = [], requested = false, lastSent = '', anchor = null;
+  let win = null, blurTimer = null, items = [], requested = false, lastSent = '', anchor = null, measuredHeight = 575;
   const busy = { vpn: false, zapret: false, music: false, pet: false };
   const hide = () => { requested = false; clearTimeout(blurTimer); win?.hide(); };
   const run = (group, fn) => async (...args) => {
@@ -85,9 +85,10 @@ function createQuickMenu({ BrowserWindow, ipcMain, screen, getVpn, getZapret, ge
   ipcMain.handle('quick:fit', (event, height) => {
     sender(event);
     if (typeof height !== 'number' || !Number.isFinite(height) || height < 1 || height > 4096) throw new Error('Некорректный размер меню.');
+    measuredHeight = Math.max(200, Math.ceil(height));
     const point = anchor || screen.getCursorScreenPoint(), area = screen.getDisplayNearestPoint(point).workArea;
     const bounds = win.getBounds();
-    const nextHeight = Math.min(area.height, Math.max(200, Math.ceil(height)));
+    const nextHeight = Math.min(area.height, measuredHeight);
     const y = Math.max(area.y, Math.min(area.y + area.height - nextHeight, point.y - 30));
     if (Math.abs(bounds.height - nextHeight) > 1 || bounds.y !== y) resize({ ...bounds, width: Math.min(310, area.width), y, height: nextHeight });
   });
@@ -109,7 +110,9 @@ function createQuickMenu({ BrowserWindow, ipcMain, screen, getVpn, getZapret, ge
     requested = true;
     const point = screen.getCursorScreenPoint(), area = screen.getDisplayNearestPoint(point).workArea;
     anchor = point;
-    const width = Math.min(310, area.width), height = Math.min(575, area.height);
+    // Reusing the window also reuses the renderer's fit cache. Keep its measured
+    // height instead of restoring the initial placeholder on every opening.
+    const width = Math.min(310, area.width), height = Math.min(measuredHeight, area.height);
     const preferredX = point.x + width + 18 <= area.x + area.width ? point.x + 18 : point.x - width - 18;
     const x = Math.max(area.x, Math.min(area.x + area.width - width, preferredX));
     const y = Math.max(area.y, Math.min(area.y + area.height - height, point.y - 30));

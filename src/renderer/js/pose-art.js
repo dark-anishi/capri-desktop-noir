@@ -18,7 +18,7 @@ export async function loadPoseArt(skin, loadImage) {
   }));
   return Object.fromEntries(entries);
 }
-const SEATED_ACTS = new Set(['talk', 'look', 'curious', 'plop', 'split', 'gaze', 'uplink']);
+const SEATED_ACTS = new Set(['talk', 'look', 'curious', 'plop', 'split', 'gaze', 'uplink', 'acknowledge', 'shrug', 'unwind', 'settle']);
 export function choosePoseArt({ stance, mode, act = null, pointing = false, dragging = false, hidden = false, busy = false, musicPlaying = false }) {
   if (hidden || dragging || pointing || busy || !['stand', 'sit'].includes(stance)) return null;
   if (stance === 'sit') {

@@ -1,6 +1,6 @@
 {
   "name": "capri-desktop",
-  "version": "0.6.11",
+  "version": "0.6.13",
   "description": "Capri, the Project Capricorn construct, living on your desktop and narrating what Codex is doing.",
   "author": "mochiiwuff",
   "repository": "github:dark-anishi/capri-desktop-noir",
@@ -80,7 +80,8 @@
     ],
     "asarUnpack": [
       "hooks/**",
-      "src/main/windows.ps1"
+      "src/main/windows.ps1",
+      "src/main/window-activity.cs"
     ],
     "win": {
       "target": "nsis",

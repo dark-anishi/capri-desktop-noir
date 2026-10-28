@@ -7,12 +7,13 @@
 param([long]$Self = 0, [int]$ParentPid = 0)
 $ErrorActionPreference = 'Stop'
 
-Add-Type -TypeDefinition @"
+$capriActivitySource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'window-activity.cs'))
+$capriTrackerSource = @"
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-public static class CapriWindows {
+public static class CapriWindowSnapshot {
   delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 
   [StructLayout(LayoutKind.Sequential)]
@@ -41,7 +42,7 @@ public static class CapriWindows {
 
   public static string Snapshot(long self) {
     var sb = new StringBuilder();
-    sb.Append("{\"fg\":").Append(GetForegroundWindow().ToInt64()).Append(",\"wins\":[");
+    sb.Append("{\"fg\":").Append(GetForegroundWindow().ToInt64()).Append(",\"activity\":").Append(CapriWindows.ForegroundActivity.Json(self)).Append(",\"wins\":[");
     int count = 0;
     EnumWindows((h, l) => {
       if (count >= 40) return false;
@@ -70,12 +71,13 @@ public static class CapriWindows {
   }
 }
 "@
+Add-Type -TypeDefinition ($capriTrackerSource + [Environment]::NewLine + $capriActivitySource)
 
-[CapriWindows]::Init()
+[CapriWindowSnapshot]::Init()
 $last = ''
 $tick = 0
 while ($true) {
-  $snap = [CapriWindows]::Snapshot($Self)
+  $snap = [CapriWindowSnapshot]::Snapshot($Self)
   if ($snap -ne $last) {
     [Console]::Out.WriteLine($snap)
     [Console]::Out.Flush()

@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 const { app, screen, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const { paths, verify } = require('./vpn/paths');
+const { isGameActivity } = require('./game-mode');
 
 // in the installed app it sits next to the app archive (asarUnpack), where PowerShell can read it
 const SCRIPT = path.join(__dirname, 'windows.ps1').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
@@ -55,7 +56,9 @@ function startWindowWatch({ overlay, onUpdate }) {
         .map((w) => toOverlay(w, bounds))
         // only what overlaps Capri's screen
         .filter((w) => w.x < bounds.width && w.x + w.w > 0 && w.y < bounds.height && w.y + w.h > 0);
-      onUpdate({ fg: snap.fg, wins });
+      const display = snap.activity?.display;
+      const gameDisplay = display && ['x', 'y', 'width', 'height'].every(key => Number.isFinite(display[key])) && display.width > 0 && display.height > 0 ? screen.screenToDipRect(null, display) : null;
+      onUpdate({ fg: snap.fg, wins, gameMode: isGameActivity(snap.activity), gameDisplay });
     });
     child.stderr.on('data', (d) => console.error('[capri] window watch:', String(d).trim()));
     let finished = false;

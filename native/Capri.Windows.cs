@@ -139,13 +139,22 @@ namespace CapriWindows {
       if (Hash(coreFile) != BuildInfo.CoreSha256) throw new Exception("Core integrity failed");
       using (var process = new Process { StartInfo = new ProcessStartInfo(coreFile, "-d \"" + directory + "\" -f \"" + configFile + "\"") { WorkingDirectory = directory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true } }) {
         process.Start();
-        using (var job = new OwnedJob(process)) {
-          process.BeginOutputReadLine(); process.BeginErrorReadLine();
-          var parentClosed = System.Threading.Tasks.Task.Run(() => Console.In.ReadToEnd());
-          while (!parentClosed.IsCompleted && !process.WaitForExit(100)) { }
-          if (!process.HasExited) process.Kill(); process.WaitForExit(5000);
-          if (!parentClosed.IsCompleted && process.ExitCode != 0) throw new Exception("Core stopped unexpectedly");
-        }
+        try {
+          using (var job = new OwnedJob(process)) {
+            process.BeginOutputReadLine(); process.BeginErrorReadLine();
+            var parentClosed = System.Threading.Tasks.Task.Run(() => Console.In.ReadToEnd());
+            var configuration = Parse(File.ReadAllText(configFile));
+            var clock = Stopwatch.StartNew();
+            while (!CoreListeners.Ready(process, configuration)) {
+              if (parentClosed.IsCompleted) return;
+              if (process.HasExited || clock.ElapsedMilliseconds > 10000) throw new CoreReadinessException();
+              Thread.Sleep(100);
+            }
+            Emit(new { ok = true, ready = true });
+            while (!parentClosed.IsCompleted && !process.WaitForExit(100)) { }
+            if (!parentClosed.IsCompleted && process.ExitCode != 0) throw new Exception("Core stopped unexpectedly");
+          }
+        } finally { if (!process.HasExited) { process.Kill(); process.WaitForExit(5000); } }
       }
     }
   }
@@ -213,6 +222,7 @@ namespace CapriWindows {
             if (!read.Wait(10000) || read.Result == null || read.Result.Length > 3 * 1024 * 1024) continue;
             object response;
             try { lock (gate) { response = Dispatch(Program.Parse(read.Result)); } }
+            catch (CoreReadinessException ex) { response = new { ok = false, error = ex.Message }; }
             catch { response = new { ok = false, error = "Service rejected request or core configuration; no unsafe settings were applied" }; }
             using (var writer = new StreamWriter(server, new UTF8Encoding(false), 4096, true) { AutoFlush = true }) writer.WriteLine(Program.Json.Serialize(response));
           }
@@ -265,7 +275,7 @@ namespace CapriWindows {
       config = Program.Json.Serialize(doc); secret = nextSecret; port = nextPort; desired = true; lastLease = DateTime.UtcNow;
       try { StartCore(); failures = 0; lastError = ""; }
       catch { config = previous; secret = previousSecret; port = previousPort; desired = wasDesired; if (desired && config != null) StartCore(); throw; }
-      return new { ok = true, running = true };
+      return new { ok = true, running = true, ready = true };
     }
     Process MakeProcess(string args) {
       var p = new Process { StartInfo = new ProcessStartInfo(CoreFile, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Program.DataRoot } };
@@ -278,9 +288,16 @@ namespace CapriWindows {
       if (Program.Hash(CoreFile) != BuildInfo.CoreSha256) throw new Exception("Core integrity failed");
       var file = Path.Combine(Program.DataRoot, "runtime.json"); File.WriteAllText(file, config, new UTF8Encoding(false));
       core = MakeProcess("-d \"" + Program.DataRoot + "\" -f \"" + file + "\"");
-      core.Start(); coreJob = new OwnedJob(core); core.BeginOutputReadLine(); core.BeginErrorReadLine();
-      for (int i = 0; i < 80; i++) { if (core.HasExited) throw new Exception("Core exited"); try { Api("GET", "/version", null); return; } catch { Thread.Sleep(100); } }
-      StopCore(); throw new Exception("Core readiness timeout");
+      try {
+        core.Start(); coreJob = new OwnedJob(core); core.BeginOutputReadLine(); core.BeginErrorReadLine();
+        var configuration = Program.Parse(config); var clock = Stopwatch.StartNew();
+        while (clock.ElapsedMilliseconds < 12000) {
+          if (core.HasExited) throw new Exception("Core exited");
+          try { Api("GET", "/version", null); if (CoreListeners.Ready(core, configuration)) return; } catch { }
+          Thread.Sleep(100);
+        }
+        throw new CoreReadinessException();
+      } catch { try { StopCore(); } catch { } throw; }
     }
     string Api(string method, string endpoint, string body) {
       var request = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + port + endpoint); request.Proxy = null; request.Method = method; request.Timeout = 2500;
@@ -295,6 +312,50 @@ namespace CapriWindows {
     void StopCore() {
       if (core == null) return;
       try { if (!core.HasExited) { try { Api("PATCH", "/configs", "{\"tun\":{\"enable\":false}}"); } catch { } if (!core.WaitForExit(500)) core.Kill(); core.WaitForExit(5000); } } finally { if (coreJob != null) coreJob.Dispose(); coreJob = null; core.Dispose(); core = null; }
+    }
+  }
+
+  sealed class CoreReadinessException : Exception {
+    public CoreReadinessException() : base("Ядро Capri не подтвердило готовность своих портов прокси и DNS. Проверь занятые локальные порты в диагностике VPN.") { }
+  }
+
+  // A controller can answer while Mihomo failed to bind its DNS/proxy ports.
+  // Require the actual owned PID in Windows' TCP and UDP tables, not merely a
+  // successful connection to a port which may belong to a different VPN.
+  static class CoreListeners {
+    [DllImport("iphlpapi.dll")] static extern uint GetExtendedTcpTable(IntPtr table, ref int size, bool order, int family, int kind, uint reserved);
+    [DllImport("iphlpapi.dll")] static extern uint GetExtendedUdpTable(IntPtr table, ref int size, bool order, int family, int kind, uint reserved);
+    static bool Owns(int pid, int port, bool udp) {
+      int size = 0;
+      uint result = udp ? GetExtendedUdpTable(IntPtr.Zero, ref size, false, 2, 1, 0) : GetExtendedTcpTable(IntPtr.Zero, ref size, false, 2, 3, 0);
+      if (result != 122 || size < 4 || size > 16 * 1024 * 1024) return false;
+      IntPtr table = Marshal.AllocHGlobal(size);
+      try {
+        result = udp ? GetExtendedUdpTable(table, ref size, false, 2, 1, 0) : GetExtendedTcpTable(table, ref size, false, 2, 3, 0);
+        if (result != 0) return false;
+        int count = Marshal.ReadInt32(table), rowSize = udp ? 12 : 24;
+        if (count < 0 || count > (size - 4) / rowSize) return false;
+        for (int i = 0; i < count; i++) {
+          IntPtr row = IntPtr.Add(table, 4 + i * rowSize);
+          int address = Marshal.ReadInt32(row, udp ? 0 : 4), raw = Marshal.ReadInt32(row, udp ? 4 : 8);
+          int owner = Marshal.ReadInt32(row, udp ? 8 : 20), actualPort = ((raw & 255) << 8) | ((raw >> 8) & 255);
+          if (owner == pid && actualPort == port && address == 0x0100007f) return true;
+        }
+        return false;
+      } finally { Marshal.FreeHGlobal(table); }
+    }
+    public static bool Ready(Process process, Dictionary<string, object> configuration) {
+      if (process.HasExited) return false;
+      object value;
+      if (!configuration.TryGetValue("mixed-port", out value) || !Owns(process.Id, Convert.ToInt32(value), false)) return false;
+      if (configuration.TryGetValue("dns", out value)) {
+        var dns = value as Dictionary<string, object>;
+        if (dns != null && Program.Text(dns, "enable", "true").Equals("true", StringComparison.OrdinalIgnoreCase)) {
+          string listen = Program.Text(dns, "listen"); int port;
+          if (!listen.StartsWith("127.0.0.1:", StringComparison.Ordinal) || !Int32.TryParse(listen.Substring(10), out port) || !Owns(process.Id, port, false) || !Owns(process.Id, port, true)) return false;
+        }
+      }
+      return true;
     }
   }
 

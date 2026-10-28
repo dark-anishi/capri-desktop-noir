@@ -24,17 +24,26 @@ async function api(endpoint, options = {}) {
     const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
     const repo = await api(base), commit = await api(base + '/commits/main');
     const release = await api(base + '/releases/tags/v' + version);
-    const screenshots = await api(base + '/contents/docs/screenshots/' + version);
-    const expected = ['apps.png', 'apps-context.png', 'folders.png', 'music.png', 'skins.png', 'vpn.png', 'quick-menu.png'];
-    if (!repo.private || expected.some(name => !screenshots.some(file => file.name === name))) throw new Error('Repository or screenshot verification failed.');
-    const animations = await api(base + '/contents/docs/animations/' + version);
-    const expectedAnimations = ['seated.gif', 'music.gif', 'sleep.gif', 'gaze.gif', 'thinking.gif', 'wave.gif'];
-    if (expectedAnimations.some(name => !animations.some(file => file.name === name))) throw new Error('Animation verification failed.');
+    if (!repo.private) throw new Error('Repository verification failed.');
+    const counts = {};
+    for (const collection of ['screenshots', 'animations']) {
+      counts[collection] = 0;
+      const mediaRoot = path.join(root, 'docs', collection);
+      for (const directory of fs.readdirSync(mediaRoot, { withFileTypes: true }).filter(item => item.isDirectory())) {
+        const remote = await api(base + '/contents/docs/' + collection + '/' + encodeURIComponent(directory.name));
+        for (const file of fs.readdirSync(path.join(mediaRoot, directory.name)).filter(name => /\.(png|jpg|gif)$/.test(name))) {
+          const bytes = fs.readFileSync(path.join(mediaRoot, directory.name, file));
+          const sha = require('node:crypto').createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex');
+          if (!remote.some(item => item.name === file && item.sha === sha)) throw new Error('Published media mismatch: ' + file);
+          counts[collection]++;
+        }
+      }
+    }
     for (const name of [`Capri-Setup-${version}.exe`, 'SHA256SUMS.txt']) {
       const asset = release.assets.find(item => item.name === name);
       if (!asset || asset.size !== fs.statSync(path.join(root, 'dist', name)).size) throw new Error('Release asset missing or incomplete: ' + name);
     }
-    console.log(JSON.stringify({ repository: repo.html_url, private: repo.private, commit: commit.sha, release: release.html_url, screenshots: expected.length, animations: expectedAnimations.length, assets: release.assets.map(asset => ({ name: asset.name, size: asset.size, digest: asset.digest })) }));
+    console.log(JSON.stringify({ repository: repo.html_url, private: repo.private, commit: commit.sha, release: release.html_url, ...counts, assets: release.assets.map(asset => ({ name: asset.name, size: asset.size, digest: asset.digest })) }));
     return;
   }
   if (command === 'create') {

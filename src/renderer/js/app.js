@@ -8,6 +8,7 @@ import { Guide } from './guide.js';
 import { LINES } from './lines.js';
 import { LAUNCHER_LINES } from './launcher-lines.js';
 import { loadPoseArt } from './pose-art.js';
+import { CompanionReactions } from './companion-reactions.js';
 import { pick, fmt } from './util.js';
 
 const host = window.host;
@@ -91,6 +92,22 @@ async function boot() {
   capri.setScale(config.scale);
 
   const brain = new Brain({ capri, panel, voice, host, lang: config.lang });
+  const reactions = new CompanionReactions({ capri, panel, language: () => brain.lang });
+  let gameStateRevision = 0;
+  const applyGameMode = (active, quiet = active) => {
+    active = active === true;
+    quiet = quiet === true;
+    if (capri.gameMode === active && capri.gameQuiet === quiet) return;
+    capri.gameMode = active; capri.gameQuiet = quiet;
+    voice.setSuppressed(quiet); panel.setQuiet(quiet);
+    capri.endAct(false); fx.clear();
+    refreshHit();
+  };
+  const wakePet = () => {
+    const sleeping = capri.mode === 'sleep';
+    capri.wake();
+    if (sleeping) reactions.react('wake');
+  };
 
   // Click-through everywhere except on her body, the panel and her biochip.
   let interactive = false;
@@ -102,6 +119,7 @@ async function boot() {
   };
   const onChip = () => Boolean(chip.visible && mouse && chip.contains(mouse.x, mouse.y, 0));
   const refreshHit = () => {
+    if (capri.gameMode) return setInteractive(false);
     if (capri.dragging) return setInteractive(true);
     if (!mouse) return setInteractive(false);
     const r = panel.rect();
@@ -219,11 +237,11 @@ async function boot() {
     if (!panel.visible && Math.random() < (when === 'end' ? 0.6 : 0.4)) panel.say({ kind: 'info', line: pick(lines), hold: 3800 });
   };
   capri.onClick = () => {
-    if (capri.mode === 'sleep') { capri.wake(); return; }
+    if (capri.mode === 'sleep') { wakePet(); return; }
     if (panel.visible) panel.hide();
     else { if (capri.mode === 'idle') capri.perform('wave'); brain.status(); }
   };
-  panel.onChar = (kind) => voice.play('blip', { mood: kind });
+  panel.onChar = (kind) => { if (!panel.current?.silent) voice.play('blip', { mood: kind }); };
   panel.onTalk = (talking) => talking && capri.perform('talk');
   capri.onMenu = () => host.openMenu();
   capri.onQuickMenu = () => host.openQuickMenu();
@@ -334,6 +352,7 @@ async function boot() {
   });
 
   host.onConfig((cfg) => {
+    if (typeof cfg.gameMode === 'boolean') { gameStateRevision++; applyGameMode(cfg.gameMode, cfg.gameQuiet); }
     changeSkin(cfg.skin).catch((err) => console.error('Skin:', err));
     voice.configure(cfg);
     capri.wander = cfg.wander;
@@ -349,14 +368,27 @@ async function boot() {
   host.onCommand(async (cmd) => {
     const t = brain.t;
     switch (cmd.name) {
+      case 'gameMode': {
+        gameStateRevision++; applyGameMode(cmd.active, cmd.quiet);
+        break;
+      }
       case 'preparePin': capri.preparePin(cmd.windowId); break;
       case 'pinWindow': await capri.pinWindow(cmd.pinned === true); break;
       case 'petRest':
         if (cmd.sleeping) capri.rest();
-        else capri.wake();
+        else wakePet();
         break;
-      case 'musicPlayback': capri.setMusicPlaying(cmd.playing === true); break;
+      case 'musicPlayback':
+        capri.setMusicPlaying(cmd.playing === true);
+        reactions.musicPlayback(cmd.playing === true);
+        break;
       case 'launcherSpeech': {
+        // Ordinary library feedback must not wake a manual nap or hidden pet.
+        if (capri.gameQuiet || capri.gameMode || capri.manualRest || capri.mode === 'sleep' || capri.hidden || capri.stowed || capri.dormant) break;
+        if (cmd.action === 'launched' || cmd.action === 'launchError') {
+          reactions.react(cmd.action === 'launched' ? 'launched' : 'launchError', cmd);
+          break;
+        }
         const phrases = LAUNCHER_LINES[brain.lang] || LAUNCHER_LINES.en;
         const action = cmd.action === 'skin' ? cmd.skin : cmd.action;
         if (action === 'open' && capri.mode === 'sleep') break;
@@ -454,6 +486,11 @@ async function boot() {
 
   // entrance: her face big in the corner says hi, then she dives down to her spot
   // (put away last time: she starts in her biochip)
+  // Images/fonts can outlive a foreground change that happened before listeners
+  // were wired. Read main again; a newer pushed state wins over an in-flight read.
+  const gameRevision = gameStateRevision;
+  const currentConfig = await host.getConfig();
+  if (gameStateRevision === gameRevision) applyGameMode(currentConfig.gameMode, currentConfig.gameQuiet);
   if (config.visible === false) capri.stowNow();
   else if (intro) await capri.intro(capri.spot('post'));
   else await capri.materialize(capri.spot('post'));

@@ -11,6 +11,7 @@ const config = require('./config');
 const { TRAY, LANGS } = require('./labels');
 const { createBridge } = require('./bridge');
 const { startWindowWatch } = require('./windows');
+const { createGameMode, sameDisplay } = require('./game-mode');
 const hooks = require('../../scripts/install-hooks');
 const demoSteps = require('../../scripts/demo-sequence');
 const { createLauncher } = require('./launcher-window');
@@ -36,6 +37,7 @@ let tray = null;
 let trayMenu = null; // also what she opens when you right-click her
 let demoTimer = null;
 let windowWatch = null;
+let gameMode = null;
 let launcher = null;
 let vpn = null;
 let zapret = null;
@@ -69,6 +71,7 @@ function fitOverlay() {
   if (!overlay) return;
   const { workArea } = targetDisplay();
   overlay.setBounds(workArea);
+  if (lastWindows) gameMode?.update(lastWindows.gameMode, { covered: sameDisplay(targetDisplay().bounds, lastWindows.gameDisplay) });
   overlay.webContents.send('overlay:resize', { width: workArea.width, height: workArea.height });
 }
 
@@ -105,7 +108,8 @@ function createOverlay() {
   overlay.setIgnoreMouseEvents(true, { forward: true });
   overlay.loadURL('capri://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
-  overlay.once('ready-to-show', () => overlay.showInactive());
+  overlay.once('ready-to-show', () => { gameMode?.sync(); if (!gameMode?.active) overlay.showInactive(); });
+  overlay.webContents.on('did-finish-load', () => gameMode?.sync());
   overlay.webContents.on('render-process-gone', (_e, details) => {
     console.error('[capri] renderer gone:', details.reason);
   });
@@ -124,6 +128,10 @@ function sendCommand(name, payload = {}) {
 
 // Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
 function toggleVisible(force) {
+  if (typeof force !== 'boolean' && gameMode?.toggleReveal()) {
+    if (!gameMode.active) { config.save({ visible: true }); sendCommand('stow', { on: false }); }
+    rebuildTray(); return;
+  }
   const visible = typeof force === 'boolean' ? force : !config.load().visible;
   config.save({ visible });
   sendCommand('stow', { on: !visible });
@@ -182,7 +190,7 @@ function resolveLang(setting) {
 // What the overlay gets: `lang` is the resolved one, `langSetting` what the user picked.
 function rendererConfig() {
   const cfg = config.load();
-  return { ...cfg, lang: resolveLang(cfg.lang), langSetting: cfg.lang };
+  return { ...cfg, lang: resolveLang(cfg.lang), langSetting: cfg.lang, gameMode: Boolean(gameMode?.active), gameQuiet: Boolean(gameMode?.quiet) };
 }
 
 function updateConfig(patch) {
@@ -311,7 +319,7 @@ function registerIpc() {
     if (justPinned) raisePinnedOverlay();
   });
   ipcMain.on('overlay:interactive', (_e, on) => {
-    overlay?.setIgnoreMouseEvents(!on, { forward: true });
+    overlay?.setIgnoreMouseEvents(gameMode?.active || !on, { forward: true });
   });
   ipcMain.handle('pet:drop-shortcuts', (event, files) => {
     if (event.sender !== overlay?.webContents) throw new Error('Invalid overlay sender');
@@ -327,7 +335,7 @@ function registerIpc() {
   ipcMain.handle('config:set', (_e, patch) => updateConfig(patch));
   ipcMain.handle('demo:window', (_e, open) => demoWindow(open));
   ipcMain.on('menu:open', () => launcher?.open());
-  ipcMain.on('menu:quick', (event) => { if (event.sender === overlay?.webContents) launcher?.openQuick(overlay); });
+  ipcMain.on('menu:quick', (event) => { if (event.sender === overlay?.webContents && !gameMode?.active) launcher?.openQuick(overlay); });
   // her welcome panel's buttons
   ipcMain.handle('hooks:install', () => runHooks('install', { quiet: true }));
   ipcMain.handle('codex:found', () => fs.existsSync(path.dirname(hooks.status().file))); // Codex keeps its settings there
@@ -447,12 +455,14 @@ function main() {
     launcher = createLauncher({ config, rendererConfig, updateConfig, sendCommand, getPetState: () => petState, preparePin: () => sendCommand('preparePin', { windowId: lastWindows?.fg || 0 }), getZapret: () => zapret, getVpn: () => { if (!vpn) throw new Error('Хранилище VPN недоступно. Проверь Windows DPAPI и папку данных Capri.'); return vpn; }, openSettings: (window) => trayMenu?.popup({ window }) });
     registerIpc();
     createOverlay();
+    gameMode = createGameMode({ overlay, onChange: (active, quiet) => sendCommand('gameMode', { active, quiet }), hideQuick: () => launcher?.hideQuick() });
     createTray();
     windowWatch = startWindowWatch({
       overlay,
       onUpdate: (data) => {
         const foregroundChanged = data.fg !== lastWindows?.fg;
         lastWindows = data;
+        gameMode.update(data.gameMode, { covered: sameDisplay(targetDisplay().bounds, data.gameDisplay) });
         if (foregroundChanged) raisePinnedOverlay();
         overlay?.webContents.send('windows:update', data);
       },
@@ -485,7 +495,7 @@ function main() {
 
 // Restacking a seated mascot must never activate it or steal keyboard focus.
 function raisePinnedOverlay() {
-  if ((!petState.pinned && !petState.canPin) || !overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
+  if (gameMode?.active || (!petState.pinned && !petState.canPin) || !overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
   const foreground = BrowserWindow.getFocusedWindow();
   if (foreground && /\/src\/(?:launcher|quick)\//.test(foreground.webContents.getURL())) return;
   overlay.setAlwaysOnTop(true, 'screen-saver');
