@@ -24,7 +24,7 @@ async function api(endpoint, options = {}) {
     const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
     const repo = await api(base), commit = await api(base + '/commits/main');
     const release = await api(base + '/releases/tags/v' + version);
-    if (!repo.private) throw new Error('Repository verification failed.');
+    if (repo.full_name.toLowerCase() !== (user.login + '/' + name).toLowerCase()) throw new Error('Repository verification failed.');
     const counts = {};
     for (const collection of ['screenshots', 'animations']) {
       counts[collection] = 0;
