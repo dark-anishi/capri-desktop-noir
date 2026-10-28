@@ -1,6 +1,6 @@
 # Документация Capri Desktop 0.6.13
 
-[README](../README.md) · [Руководство пользователя](../README.ru.md) · [Изменения](../CHANGELOG.md) · [Релиз 0.6.13](RELEASE-0.6.13.md)
+[README](../README.md) · [Изменения](../CHANGELOG.md) · [Релиз 0.6.13](RELEASE-0.6.13.md)
 
 ## Интерфейс и персонаж
 

@@ -8,7 +8,7 @@ Capri для Windows 10/11 x64: чёрно-белый персонаж, библ
 - YAML/HTTPS-подписки, избранные серверы, трафик, DNS, прямые исключения сайтов и системный TUN через Windows-службу. Смена локации переподключает старые соединения ядра.
 - Запуск локальных стратегий Zapret с сохранением последней успешной; исправлен обмен подтверждением запуска между нативными компонентами.
 
-[Новые скриншоты 0.6.11](https://github.com/dark-anishi/capri-desktop-noir/blob/main/docs/SCREENSHOTS.md) · [Руководство](https://github.com/dark-anishi/capri-desktop-noir/blob/main/README.ru.md)
+[Новые скриншоты 0.6.11](https://github.com/dark-anishi/capri-desktop-noir/blob/main/docs/SCREENSHOTS.md) · [Руководство](https://github.com/dark-anishi/capri-desktop-noir/blob/main/README.md)
 
 ## Установка
 
