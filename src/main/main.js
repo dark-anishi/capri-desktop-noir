@@ -12,6 +12,7 @@ const { TRAY, LANGS } = require('./labels');
 const { createBridge } = require('./bridge');
 const { startWindowWatch } = require('./windows');
 const { createGameMode, sameDisplay } = require('./game-mode');
+const { createOverlayInput } = require('./overlay-input');
 const hooks = require('../../scripts/install-hooks');
 const demoSteps = require('../../scripts/demo-sequence');
 const { createLauncher } = require('./launcher-window');
@@ -33,6 +34,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let overlay = null;
+let overlayInput = null;
 let tray = null;
 let trayMenu = null; // also what she opens when you right-click her
 let demoTimer = null;
@@ -71,6 +73,7 @@ function fitOverlay() {
   if (!overlay) return;
   const { workArea } = targetDisplay();
   overlay.setBounds(workArea);
+  overlayInput?.reapply();
   if (lastWindows) gameMode?.update(lastWindows.gameMode, { covered: sameDisplay(targetDisplay().bounds, lastWindows.gameDisplay) });
   overlay.webContents.send('overlay:resize', { width: workArea.width, height: workArea.height });
 }
@@ -106,6 +109,7 @@ function createOverlay() {
 
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true, { forward: true });
+  overlayInput = createOverlayInput({ overlay, blocked: () => gameMode?.active === true });
   overlay.loadURL('capri://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
   overlay.once('ready-to-show', () => { gameMode?.sync(); if (!gameMode?.active) overlay.showInactive(); });
@@ -318,8 +322,9 @@ function registerIpc() {
     petState = Object.fromEntries(fields.map((key) => [key, value[key]])); launcher?.petChanged(petState);
     if (justPinned) raisePinnedOverlay();
   });
-  ipcMain.on('overlay:interactive', (_e, on) => {
-    overlay?.setIgnoreMouseEvents(gameMode?.active || !on, { forward: true });
+  ipcMain.on('overlay:interactive', (event, on) => {
+    if (!overlay || overlay.isDestroyed() || event.sender !== overlay.webContents || typeof on !== 'boolean') return;
+    overlayInput?.setInteractive(on);
   });
   ipcMain.handle('pet:drop-shortcuts', (event, files) => {
     if (event.sender !== overlay?.webContents) throw new Error('Invalid overlay sender');
@@ -476,7 +481,8 @@ function main() {
     screen.on('display-metrics-changed', fitOverlay);
     screen.on('display-added', () => { fitOverlay(); rebuildTray(); });
     screen.on('display-removed', () => { fitOverlay(); rebuildTray(); });
-    powerMonitor.on('resume', () => { if (vpn?.wanted) vpn.restart().catch(() => {}); });
+    powerMonitor.on('resume', () => { overlayInput?.reapply(); if (vpn?.wanted) vpn.restart().catch(() => {}); });
+    powerMonitor.on('unlock-screen', () => overlayInput?.reapply());
   });
 
   app.on('before-quit', (event) => {
@@ -486,6 +492,7 @@ function main() {
   });
 
   app.on('will-quit', () => {
+    overlayInput?.close();
     globalShortcut.unregisterAll();
     windowWatch?.stop();
     launcher?.close();

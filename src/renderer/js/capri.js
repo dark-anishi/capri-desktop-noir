@@ -61,6 +61,7 @@ export class Capri {
     this.wander = true;
     this.possessWindows = true; // tray: "Possess my windows"
     this.dragging = false;
+    this.pointerHeld = false;
 
     this.p = {
       seed: 0, boil: 0.9, hair: 0, head: 0, mane: 0, armL: 0, armR: 0, longL: 1, longR: 1, sit: 0, kickL: 0, kickR: 0,
@@ -1650,21 +1651,36 @@ export class Capri {
 
   bindPointer() {
     let down = null;
+    let pointerId = null;
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       if (this.hit(e.clientX, e.clientY)) this.onMenu?.(); // right-click: her menu
     });
     this.canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
-    this.canvas.addEventListener('mousedown', (e) => {
+    const press = (e) => {
+      if (e.button !== 0 && e.button !== 1) return;
+      if (!this.hit(e.clientX, e.clientY)) return;
+      if (e.button === 0 && this.busy) return;
+      // Hold the native window interactive from the initial press, not just
+      // after crossing the drag threshold. Her animated silhouette can move.
+      if (e.type === 'pointerdown') {
+        pointerId = e.pointerId;
+        try { this.canvas.setPointerCapture(pointerId); } catch { /* synthetic input / closing surface */ }
+      }
+      this.pointerHeld = true;
       if (e.button === 1 && this.hit(e.clientX, e.clientY)) {
         e.preventDefault(); this.preparePin(); this.onQuickMenu?.(); return;
       }
-      if (e.button !== 0 || this.busy || !this.hit(e.clientX, e.clientY)) return;
       down = { x: e.clientX, y: e.clientY, pos: { ...this.pos } };
-    });
-    window.addEventListener('mousemove', (e) => {
+      e.preventDefault();
+    };
+    this.canvas.addEventListener('pointerdown', press);
+    // Retain compatibility with mouse-only injected events; a real pointer
+    // sequence must never open the quick menu twice through mousedown.
+    this.canvas.addEventListener('mousedown', (e) => { if (pointerId === null) press(e); });
+    const move = (e) => {
       this.mouse = { x: e.clientX, y: e.clientY }; // a window she's in watches it
-      if (down && !(e.buttons & 1)) release(true);
+      if (this.pointerHeld && !(e.buttons & (down ? 1 : 4))) release(true);
       if (down) {
         const dx = e.clientX - down.x, dy = e.clientY - down.y;
         if (!this.dragging && Math.hypot(dx, dy) > 5 && !this.busy) {
@@ -1691,8 +1707,13 @@ export class Capri {
         return;
       }
       this.notice(e.clientX, e.clientY);
-    });
+    };
+    window.addEventListener('pointermove', (e) => { if (pointerId === null || e.pointerId === pointerId) move(e); });
+    window.addEventListener('mousemove', (e) => { if (pointerId === null) move(e); });
     const release = (cancelled = false) => {
+      const captured = pointerId;
+      pointerId = null; this.pointerHeld = false;
+      if (captured !== null && this.canvas.hasPointerCapture?.(captured)) this.canvas.releasePointerCapture(captured);
       if (!down) return;
       const wasDragging = this.dragging;
       down = null; this.dragging = false;
@@ -1701,9 +1722,11 @@ export class Capri {
         this.onTeleport?.('end'); this.drop();
       } else if (!cancelled) this.onClick?.();
     };
-    window.addEventListener('mouseup', (e) => { if (e.button === 0) release(); });
+    window.addEventListener('pointerup', (e) => { if (e.pointerId === pointerId && (e.button === 0 || e.button === 1)) release(); });
+    window.addEventListener('mouseup', (e) => { if (e.button === 0 || e.button === 1) release(); });
     window.addEventListener('blur', () => release(true));
-    window.addEventListener('pointercancel', () => release(true));
+    window.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) release(true); });
+    this.canvas.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pointerId) release(true); });
 
   }
 

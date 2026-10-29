@@ -120,7 +120,7 @@ async function boot() {
   const onChip = () => Boolean(chip.visible && mouse && chip.contains(mouse.x, mouse.y, 0));
   const refreshHit = () => {
     if (capri.gameMode) return setInteractive(false);
-    if (capri.dragging) return setInteractive(true);
+    if (capri.pointerHeld || capri.dragging) return setInteractive(true);
     if (!mouse) return setInteractive(false);
     const r = panel.rect();
     const onPanel = r && mouse.x >= r.left && mouse.x <= r.right && mouse.y >= r.top && mouse.y <= r.bottom;
