@@ -15,7 +15,7 @@ const { isGameActivity } = require('./game-mode');
 // in the installed app it sits next to the app archive (asarUnpack), where PowerShell can read it
 const SCRIPT = path.join(__dirname, 'windows.ps1').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 
-function startWindowWatch({ overlay, onUpdate }) {
+function startWindowWatch({ overlay, onUpdate, onInputRecovered = () => {} }) {
   if (process.platform !== 'win32') return { stop() {} };
 
   let child = null;
@@ -45,6 +45,7 @@ function startWindowWatch({ overlay, onUpdate }) {
       } catch {
         return;
       }
+      if (snap?.inputRecovered === true && !overlay.isDestroyed()) { onInputRecovered(); return; }
       if (!snap || !Array.isArray(snap.wins) || !Number.isFinite(snap.fg) || overlay.isDestroyed()) return;
       const bounds = overlay.getBounds();
       const ownMenus = new Set(BrowserWindow.getAllWindows().filter((window) => /\/src\/(?:launcher|quick)\//.test(window.webContents.getURL())).map((window) => {

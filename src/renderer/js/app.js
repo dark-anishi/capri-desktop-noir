@@ -368,6 +368,13 @@ async function boot() {
   host.onCommand(async (cmd) => {
     const t = brain.t;
     switch (cmd.name) {
+      case 'recoverInput': {
+        capri.cancelPointer();
+        mouse = null; interactive = false; host.setInteractive(false);
+        const p = await host.cursor();
+        mouse = p.inside ? p : null; refreshHit();
+        break;
+      }
       case 'gameMode': {
         gameStateRevision++; applyGameMode(cmd.active, cmd.quiet);
         break;

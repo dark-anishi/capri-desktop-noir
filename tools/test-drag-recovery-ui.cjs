@@ -66,13 +66,14 @@ const root = path.resolve(__dirname, '..');
       win.webContents.sendInputEvent(event);
     }, { type, x: Math.round(point.x), y: Math.round(point.y), ...extra });
     for (let i = 0; i < 12; i++) {
-      const p = await page.evaluate(() => { dragFixture.c.endAct(false); dragFixture.c.drawFrame(); const p = dragFixture.point(); if (document.elementFromPoint(p.x, p.y) !== dragFixture.canvas) throw new Error('Fixture canvas is not the actual hit target'); return p; });
+      const p = await page.evaluate(() => { dragFixture.c.endAct(false); dragFixture.c.pos.x = innerWidth / 2; dragFixture.c.drawFrame(); const p = dragFixture.point(); if (document.elementFromPoint(p.x, p.y) !== dragFixture.canvas) throw new Error('Fixture canvas is not the actual hit target'); return p; });
       await nativeInput('mouseMove', p);
       await nativeInput('mouseDown', p, { button: 'left', clickCount: 1 });
       await page.waitForFunction(() => dragFixture.c.pointerHeld);
       const moved = { x: p.x + 40, y: p.y - 15 };
       await nativeInput('mouseMove', moved, { modifiers: ['leftButtonDown'] });
-      await page.waitForFunction(() => dragFixture.c.dragging);
+      try { await page.waitForFunction(() => dragFixture.c.dragging, null, { timeout: 3000 }); }
+      catch (error) { console.error('Drag fixture state', await page.evaluate(() => ({ busy: dragFixture.c.busy, held: dragFixture.c.pointerHeld, dragging: dragFixture.c.dragging, position: dragFixture.c.pos, events: dragFixture.events.slice(-10) }))); throw error; }
       await nativeInput('mouseUp', moved, { button: 'left', clickCount: 1 });
       await page.waitForFunction(() => !dragFixture.c.pointerHeld && !dragFixture.c.dragging);
       await page.evaluate(() => { dragFixture.c.setStance('stand'); dragFixture.c.pos.y = dragFixture.c.floor; dragFixture.c.drawFrame(); });

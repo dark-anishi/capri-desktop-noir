@@ -109,7 +109,7 @@ function createOverlay() {
 
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true, { forward: true });
-  overlayInput = createOverlayInput({ overlay, blocked: () => gameMode?.active === true });
+  overlayInput = createOverlayInput({ overlay, blocked: () => gameMode?.active === true, onRecover: () => sendCommand('recoverInput') });
   overlay.loadURL('capri://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
   overlay.once('ready-to-show', () => { gameMode?.sync(); if (!gameMode?.active) overlay.showInactive(); });
@@ -464,6 +464,14 @@ function main() {
     createTray();
     windowWatch = startWindowWatch({
       overlay,
+      onInputRecovered: () => {
+        sendCommand('recoverInput'); overlayInput?.reapply();
+        const file = path.join(app.getPath('userData'), 'input-recovery.log');
+        try {
+          if (fs.existsSync(file) && fs.statSync(file).size > 65536) fs.writeFileSync(file, '');
+          fs.appendFileSync(file, `${new Date().toISOString()} restored hidden Chromium input window\n`);
+        } catch { /* Logging must not interrupt input recovery. */ }
+      },
       onUpdate: (data) => {
         const foregroundChanged = data.fg !== lastWindows?.fg;
         lastWindows = data;

@@ -644,7 +644,7 @@ export class FxLayer {
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = this.colors.paper;
+    ctx.fillStyle = this.skin === 'mono' ? this.colors.ink : this.colors.paper;
     ctx.fillText(it.label, -w / 2, fs * 0.04);
     ctx.restore();
   }

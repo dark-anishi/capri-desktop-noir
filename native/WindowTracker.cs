@@ -42,6 +42,23 @@ static class WindowTracker {
   [DllImport("user32.dll")] static extern IntPtr DispatchMessage(ref MSG msg);
   [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint msg, UIntPtr w, IntPtr l);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient, ref Guid setting, uint flags);
+  [DllImport("user32.dll")] static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr h, IntPtr after, string cls, string caption);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int command);
+
+  public static bool RepairInput(long self, int parentPid) {
+    IntPtr parent = new IntPtr(self); uint owner;
+    GetWindowThreadProcessId(parent, out owner);
+    if (owner != parentPid || !IsWindowVisible(parent) || IsIconic(parent)) return false;
+    IntPtr child = FindWindowEx(parent, IntPtr.Zero, "Chrome_RenderWidgetHostHWND", null);
+    if (child == IntPtr.Zero || IsWindowVisible(child)) return false;
+    GetWindowThreadProcessId(child, out owner);
+    if (owner != parentPid) return false;
+    ShowWindow(child, 8); // SW_SHOWNA: restore only the input child, never activate.
+    return IsWindowVisible(child);
+  }
 
   public static void Run(long self, int parentPid) {
     if (self <= 0 || parentPid <= 0) throw new ArgumentException("Invalid window watcher owner");
@@ -51,7 +68,13 @@ static class WindowTracker {
     };
     var callbackRoot = GCHandle.Alloc(callback);
     IntPtr systemHook = IntPtr.Zero, objectHook = IntPtr.Zero; UIntPtr timer = UIntPtr.Zero;
+    IntPtr displayPower = IntPtr.Zero;
     try {
+      // Deliver session-display off/on/dim notifications to Electron's HWND,
+      // even when the computer never suspends or locks.
+      Guid displaySetting = new Guid("2B84C20E-AD23-4DDF-93DB-05FFBD7EFCA5");
+      displayPower = RegisterPowerSettingNotification(new IntPtr(self), ref displaySetting, 0);
+      if (displayPower == IntPtr.Zero) Console.Error.WriteLine("Display power notification registration failed: " + Marshal.GetLastWin32Error());
       systemHook = SetWinEventHook(3, 0x17, IntPtr.Zero, callback, 0, 0, 2);
       objectHook = SetWinEventHook(0x8000, 0x800B, IntPtr.Zero, callback, 0, 0, 2);
       if (systemHook == IntPtr.Zero || objectHook == IntPtr.Zero) throw new Exception("Window event hook unavailable");
@@ -68,6 +91,7 @@ static class WindowTracker {
             long now = clock.ElapsedMilliseconds;
             if (now - lastParentCheck >= 1000) { if (parent.HasExited) break; lastParentCheck = now; }
             if (dirty || now - lastScan >= 500) {
+              if (RepairInput(self, parentPid)) { Console.WriteLine("{\"inputRecovered\":true}"); Console.Out.Flush(); }
               dirty = false; lastScan = now; string snap = Snapshot(self);
               if (snap != last) { Console.WriteLine(snap); Console.Out.Flush(); last = snap; }
             }
@@ -76,6 +100,7 @@ static class WindowTracker {
         }
       }
     } finally {
+      if (displayPower != IntPtr.Zero) UnregisterPowerSettingNotification(displayPower);
       if (timer != UIntPtr.Zero) KillTimer(IntPtr.Zero, timer);
       if (systemHook != IntPtr.Zero) UnhookWinEvent(systemHook);
       if (objectHook != IntPtr.Zero) UnhookWinEvent(objectHook);

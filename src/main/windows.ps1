@@ -40,6 +40,28 @@ public static class CapriWindowSnapshot {
     SetProcessDpiAwarenessContext(new IntPtr(-4)); // per-monitor v2: real pixels everywhere
   }
 
+  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient, ref Guid setting, uint flags);
+  [DllImport("user32.dll")] static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+  public static IntPtr WatchDisplay(long self) {
+    Guid setting = new Guid("2B84C20E-AD23-4DDF-93DB-05FFBD7EFCA5");
+    return RegisterPowerSettingNotification(new IntPtr(self), ref setting, 0);
+  }
+  public static void StopDisplay(IntPtr handle) { if (handle != IntPtr.Zero) UnregisterPowerSettingNotification(handle); }
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr h, IntPtr after, string cls, string caption);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int command);
+  public static bool RepairInput(long self, int parentPid) {
+    IntPtr parent = new IntPtr(self); uint owner;
+    GetWindowThreadProcessId(parent, out owner);
+    if (owner != parentPid || !IsWindowVisible(parent) || IsIconic(parent)) return false;
+    IntPtr child = FindWindowEx(parent, IntPtr.Zero, "Chrome_RenderWidgetHostHWND", null);
+    if (child == IntPtr.Zero || IsWindowVisible(child)) return false;
+    GetWindowThreadProcessId(child, out owner);
+    if (owner != parentPid) return false;
+    ShowWindow(child, 8);
+    return IsWindowVisible(child);
+  }
+
   public static string Snapshot(long self) {
     var sb = new StringBuilder();
     sb.Append("{\"fg\":").Append(GetForegroundWindow().ToInt64()).Append(",\"activity\":").Append(CapriWindows.ForegroundActivity.Json(self)).Append(",\"wins\":[");
@@ -74,9 +96,16 @@ public static class CapriWindowSnapshot {
 Add-Type -TypeDefinition ($capriTrackerSource + [Environment]::NewLine + $capriActivitySource)
 
 [CapriWindowSnapshot]::Init()
+$displayPower = [CapriWindowSnapshot]::WatchDisplay($Self)
+if ($displayPower -eq [IntPtr]::Zero) { [Console]::Error.WriteLine('Display power notification registration failed') }
 $last = ''
 $tick = 0
+try {
 while ($true) {
+  if (($tick % 15 -eq 0) -and [CapriWindowSnapshot]::RepairInput($Self, $ParentPid)) {
+    [Console]::Out.WriteLine('{"inputRecovered":true}')
+    [Console]::Out.Flush()
+  }
   $snap = [CapriWindowSnapshot]::Snapshot($Self)
   if ($snap -ne $last) {
     [Console]::Out.WriteLine($snap)
@@ -88,3 +117,4 @@ while ($true) {
   if ($ParentPid -and ($tick % 20 -eq 0) -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { break }
   Start-Sleep -Milliseconds 33
 }
+} finally { [CapriWindowSnapshot]::StopDisplay($displayPower) }

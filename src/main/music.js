@@ -14,6 +14,33 @@ function createMusic({ window, onState, initialVolume = .7, onVolume = () => {} 
   let playing = false;
   let volume = Number.isFinite(initialVolume) ? Math.max(0, Math.min(1, initialVolume)) : .7;
   const authWindows = new Set();
+  let volumeTimer = null, volumeReading = false, volumeRevision = 0;
+  const COMMAND_TIMEOUT = 2500;
+  async function evaluate(script, gesture = false) {
+    let timer;
+    try {
+      // WebContents.executeJavaScript waits for did-stop-loading, even when
+      // the player DOM already works. Address its current frame directly.
+      return await Promise.race([
+        view.webContents.mainFrame.executeJavaScript(script, gesture),
+        new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error('Плеер не ответил за 2,5 секунды. Попробуй ещё раз.')), COMMAND_TIMEOUT); }),
+      ]);
+    } finally { clearTimeout(timer); }
+  }
+  function saveVolume(value) {
+    if (closed || typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1 || Math.abs(volume - value) < .0001) return;
+    volume = value; onVolume(value); notify();
+  }
+  async function readVolume() {
+    if (closed || loading || !loaded || volumeReading || !view || view.webContents.isDestroyed()) return;
+    volumeReading = true;
+    const revision = volumeRevision;
+    try {
+      const value = await evaluate('window.__capriMusicVolume?.()');
+      if (!closed && revision === volumeRevision) saveVolume(value);
+    } catch { /* Navigation and player restarts are expected. */ }
+    finally { volumeReading = false; }
+  }
   const theme = fs.readFileSync(path.join(__dirname, 'music-theme.css'), 'utf8');
   function notify() {
     if (!closed) onState({ loading, error, playing, ready: loaded, canGoBack: Boolean(view?.webContents.navigationHistory.canGoBack()) });
@@ -46,6 +73,7 @@ function createMusic({ window, onState, initialVolume = .7, onVolume = () => {} 
     view.setBackgroundColor('#111113');
     window.contentView.addChildView(view); view.setVisible(false);
     const contents = view.webContents;
+    volumeTimer = setInterval(readVolume, 300); volumeTimer.unref?.();
     contents.on('media-started-playing', () => playback(true));
     contents.on('media-paused', () => playback(contents.isCurrentlyAudible()));
     contents.on('audio-state-changed', ({ audible }) => playback(audible));
@@ -72,9 +100,13 @@ function createMusic({ window, onState, initialVolume = .7, onVolume = () => {} 
         if (/^https:\/\/music\.yandex\./.test(auth.webContents.getURL())) { contents.reload(); auth.close(); }
       });
     });
-    contents.on('dom-ready', () => contents.insertCSS(theme, { cssOrigin: 'user' }).catch((err) => console.error('[capri] music theme:', err.message)));
+    contents.on('dom-ready', () => {
+      contents.insertCSS(theme, { cssOrigin: 'user' }).catch((err) => console.error('[capri] music theme:', err.message));
+      loading = false; loaded = true; error = ''; position();
+      control('volume', volume).catch(() => {}); notify();
+    });
     contents.on('did-start-navigation', (_event, _url, inPlace, isMainFrame) => {
-      if (isMainFrame && !inPlace) { loading = true; error = ''; playback(false); notify(); }
+      if (isMainFrame && !inPlace) { volumeRevision++; loading = true; loaded = false; error = ''; playback(false); notify(); }
     });
     contents.on('did-finish-load', () => { loading = false; loaded = true; error = ''; position(); control('volume', volume).catch(() => {}); notify(); });
     contents.on('did-navigate-in-page', notify);
@@ -112,14 +144,18 @@ function createMusic({ window, onState, initialVolume = .7, onVolume = () => {} 
   async function control(command, value) {
     if (!['toggle', 'next', 'previous', 'volume'].includes(command)) throw new Error('Неизвестная команда плеера.');
     if (command === 'volume' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1)) throw new Error('Некорректная громкость.');
-    if (!view || view.webContents.isDestroyed() || !loaded) throw new Error('Сначала открой Яндекс Музыку и выбери трек.');
-    const script = `window.__capriMusicControl?.(${JSON.stringify(command)}, ${command === 'volume' ? value : 'undefined'})`;
-    if (!await view.webContents.executeJavaScript(script, true)) throw new Error('Плеер ещё не готов. Нажми «Обновить» во вкладке музыки.');
-    if (command === 'volume') { volume = value; onVolume(value); notify(); }
+    if (!view || view.webContents.isDestroyed() || !loaded || loading) throw new Error('Сначала открой Яндекс Музыку и выбери трек.');
+    const revision = command === 'volume' ? ++volumeRevision : volumeRevision;
+    // A command queued by an unresponsive renderer must not run a minute later.
+    const deadline = Date.now() + COMMAND_TIMEOUT;
+    const script = `Date.now() <= ${deadline} && window.__capriMusicControl?.(${JSON.stringify(command)}, ${command === 'volume' ? value : 'undefined'})`;
+    if (!await evaluate(script, command !== 'volume')) throw new Error('Плеер ещё не готов. Нажми «Обновить» во вкладке музыки.');
+    if (command === 'volume' && revision === volumeRevision) saveVolume(value);
   }
   const togglePlayback = () => control('toggle');
   window.on('resize', position);
   function close() {
+    clearInterval(volumeTimer); volumeTimer = null;
     playback(false);
     closed = true; window.removeListener('resize', position);
     for (const auth of authWindows) if (!auth.isDestroyed()) auth.destroy();

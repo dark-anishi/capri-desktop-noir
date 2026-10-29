@@ -1727,6 +1727,7 @@ export class Capri {
     window.addEventListener('blur', () => release(true));
     window.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) release(true); });
     this.canvas.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pointerId) release(true); });
+    this.cancelPointer = () => release(true);
 
   }
 

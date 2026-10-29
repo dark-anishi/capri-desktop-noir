@@ -46,6 +46,7 @@ namespace CapriWindows {
         try { Console.InputEncoding = new UTF8Encoding(false); } catch (IOException) { }
         try { Console.OutputEncoding = new UTF8Encoding(false); } catch (IOException) { }
         if (args[0] == "--watch-windows" && args.Length == 3) { WindowTracker.Run(long.Parse(args[1]), int.Parse(args[2])); return 0; }
+        if (args[0] == "--repair-input-window" && args.Length == 3) { Emit(new { repaired = WindowTracker.RepairInput(long.Parse(args[1]), int.Parse(args[2])) }); return 0; }
         if (args[0] == "--zapret") { ZapretBridge.Broker(); return 0; }
         if (args[0] == "--zapret-host" && args.Length == 3) { ZapretBridge.Host(args[1], args[2]); return 0; }
         if (args[0] == "--icon") { Emit(Icons.Read(Parse(Console.In.ReadToEnd()))); return 0; }
